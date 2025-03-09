@@ -164,7 +164,6 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
-  console.log(`Successfully parsed "${value}" as ${numberValue}`);
   return numberValue;
 };
 
@@ -219,6 +218,9 @@ const normalizeNameForComparison = (name: string): string => {
 
 export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles: ParsedFile[]): Student[] => {
   console.log("=== STARTING STUDENT AND QUIZ DATA COMBINATION ===");
+  console.log("DEBUG: Number of student files:", studentFiles.length);
+  console.log("DEBUG: Number of quiz files:", quizFiles.length);
+  
   const students: Student[] = [];
   const studentMap: Record<string, any> = {};
   let studentIdCounter = 0;
@@ -366,6 +368,11 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         const quizKeys = Object.keys(quizData).filter(key => key !== studentField);
         console.log(`${name} has ${quizKeys.length} quiz scores to process`);
         
+        // DEBUG: Print all quiz scores for this student
+        quizKeys.forEach(key => {
+          console.log(`DEBUG: Quiz "${key}" - Raw value: "${quizData[key]}"`);
+        });
+        
         if (quizKeys.length === 0) {
           console.log(`WARNING: No quiz scores found for ${name}`);
         }
@@ -382,6 +389,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
           
           // Convert quiz score to number with improved parsing
           const scoreValue = parseScoreValue(originalValue);
+          console.log(`Quiz "${key}" - Parsed score: ${scoreValue}`);
           
           // Only count scores > 0 for average calculation
           if (scoreValue > 0) {
@@ -404,6 +412,10 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
           matchedStudent.score = 0;
           console.log(`No valid scores for ${matchedStudent.fullName}, setting average to 0`);
         }
+        
+        // DEBUG: Print the final quiz scores and average
+        console.log(`DEBUG: Final quiz scores for ${matchedStudent.fullName}:`, matchedStudent.quizScores);
+        console.log(`DEBUG: Final average score: ${matchedStudent.score}`);
       } else {
         console.log(`No matching student found for: ${name}`);
       }
@@ -453,7 +465,7 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
     // Sample the first quiz entry to check if we're correctly parsing quiz scores
     const firstEntry = result.data[0];
     // All fields except 'student' are considered quiz names with scores
-    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student');
+    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student' && key !== 'name');
     
     console.log(`Found ${quizKeys.length} potential quiz columns`);
     

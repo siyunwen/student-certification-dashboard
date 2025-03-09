@@ -127,6 +127,13 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       : <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" />;
   };
   
+  // Debug scores
+  console.log("DEBUG - StudentTable: Students with scores:", students.map(s => ({
+    name: s.fullName,
+    score: s.score,
+    quizCount: s.quizScores.length
+  })));
+  
   return (
     <div className={className}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
@@ -218,6 +225,9 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
               paginatedStudents.map((student) => {
                 const isPassing = student.score >= passThreshold && student.courseCompleted;
                 const isExpanded = expandedStudents.includes(student.id);
+                
+                // Debug: Print student score for this specific row
+                console.log(`Student ${student.fullName}: score=${student.score}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
                 
                 return (
                   <React.Fragment key={student.id}>
