@@ -14,7 +14,7 @@ import {
   groupFilesByCourse
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle } from 'lucide-react';
+import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -34,6 +34,7 @@ const Index = () => {
     averageScore: 0,
     passRate: 0
   });
+  const [showResults, setShowResults] = useState(false);
   
   // Group files by course
   const courseMap = groupFilesByCourse(parsedFiles);
@@ -56,6 +57,7 @@ const Index = () => {
   
   const handleFilesLoaded = (files: ParsedFile[]) => {
     setParsedFiles(files);
+    setShowResults(false); // Hide results when new files are loaded
   };
   
   const processFiles = () => {
@@ -71,7 +73,8 @@ const Index = () => {
       if (completeCourses.length === 0) {
         // Don't process if no complete courses
         if (parsedFiles.length > 0) {
-          toast.info('Upload both student and quiz files for at least one course');
+          // Don't show a toast here, as we don't want to show warnings for just one file
+          console.log('Waiting for complete course data (both student and quiz files)');
         }
         setStudents([]);
         return;
@@ -130,6 +133,22 @@ const Index = () => {
     toast.success('Report downloaded successfully');
   };
   
+  const handleShowResults = () => {
+    if (completeCoursesCount === 0) {
+      toast.info('Please upload both student and quiz files for at least one course');
+      return;
+    }
+    
+    // Force processing of files to ensure we have the latest data
+    processFiles();
+    setShowResults(true);
+    
+    // Scroll to results section
+    setTimeout(() => {
+      document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+  
   // Generate chart data
   const chartData = [
     { name: 'Eligible', value: stats.eligibleStudents },
@@ -145,7 +164,7 @@ const Index = () => {
             title="Student Certification Dashboard"
             description="Upload student data files and quiz scores, customize certification criteria, and view eligible students"
           >
-            {students.length > 0 && (
+            {showResults && students.length > 0 && (
               <Button
                 className="flex items-center gap-2"
                 onClick={generateReport}
@@ -187,13 +206,6 @@ const Index = () => {
                 )}
               </div>
             )}
-            
-            {parsedFiles.length > 0 && completeCoursesCount === 0 && (
-              <div className="mt-3 flex items-center text-amber-600 text-sm">
-                <AlertCircle className="h-4 w-4 mr-1" />
-                <span>Upload both student and quiz files for the same course</span>
-              </div>
-            )}
           </DashboardCard>
           
           <DashboardCard 
@@ -208,190 +220,207 @@ const Index = () => {
           </DashboardCard>
         </section>
         
-        {/* Stats Section - Visible only when students are loaded */}
-        {students.length > 0 && (
-          <section className="section mt-8">
-            <h2 className="section-title">Certification Overview</h2>
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-              <DashboardCard className="relative overflow-hidden">
-                <div className="absolute top-3 right-3 w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
-                  <Users className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Students</p>
-                <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
-                  <AnimatedNumber value={stats.totalStudents} />
-                </h3>
-              </DashboardCard>
-              
-              <DashboardCard className="relative overflow-hidden">
-                <div className="absolute top-3 right-3 w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                  <Award className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Eligible Students</p>
-                <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
-                  <AnimatedNumber value={stats.eligibleStudents} />
-                </h3>
-              </DashboardCard>
-              
-              <DashboardCard className="relative overflow-hidden">
-                <div className="absolute top-3 right-3 w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
-                  <BarChart className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Average Score</p>
-                <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
-                  <AnimatedNumber 
-                    value={stats.averageScore} 
-                    formatValue={(val) => `${val.toFixed(1)}%`} 
-                  />
-                </h3>
-              </DashboardCard>
-              
-              <DashboardCard className="relative overflow-hidden">
-                <div className="absolute top-3 right-3 w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <TrendingUp className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
-                <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
-                  <AnimatedNumber 
-                    value={stats.passRate} 
-                    formatValue={(val) => `${val.toFixed(1)}%`} 
-                  />
-                </h3>
-              </DashboardCard>
-            </div>
-          </section>
-        )}
+        {/* Show Results Button */}
+        <section className="mt-8 flex justify-center">
+          <Button 
+            onClick={handleShowResults} 
+            className="w-full max-w-md py-6 text-lg"
+            size="lg"
+          >
+            <Eye className="mr-2 h-5 w-5" />
+            Show Certification Results
+          </Button>
+        </section>
         
-        {/* Chart and Table Section - Visible only when students are loaded */}
-        {students.length > 0 && (
-          <>
-            <section className="section mt-8">
-              <h2 className="section-title">Certification Distribution</h2>
-              <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-                <DashboardCard className="md:col-span-1 h-[300px] flex flex-col justify-center">
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                          animationDuration={800}
-                          animationBegin={0}
-                          animationEasing="ease-out"
-                        >
-                          {chartData.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[index % COLORS.length]}
-                              className="animate-fade-in"
-                              fillOpacity={index === 0 ? 1 : 0.6}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          formatter={(value) => [`${value} Students`, '']}
-                          contentStyle={{
-                            borderRadius: '0.5rem',
-                            border: 'none',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                            padding: '0.5rem 1rem',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex justify-center space-x-6">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-brand-600 mr-2"></div>
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Eligible</span>
+        {/* Results Sections - Only visible when Show Results is clicked */}
+        {showResults && (
+          <div id="results-section">
+            {/* Stats Section - Visible only when students are loaded */}
+            {students.length > 0 && (
+              <section className="section mt-8 animate-fade-in">
+                <h2 className="section-title">Certification Overview</h2>
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+                  <DashboardCard className="relative overflow-hidden">
+                    <div className="absolute top-3 right-3 w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
+                      <Users className="w-6 h-6" />
                     </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-slate-300 mr-2"></div>
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Not Eligible</span>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Students</p>
+                    <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
+                      <AnimatedNumber value={stats.totalStudents} />
+                    </h3>
+                  </DashboardCard>
+                  
+                  <DashboardCard className="relative overflow-hidden">
+                    <div className="absolute top-3 right-3 w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                      <Award className="w-6 h-6" />
                     </div>
-                  </div>
-                </DashboardCard>
-                
-                <DashboardCard className="md:col-span-2">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-slate-900 dark:text-white">Certification Summary</h3>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Eligible Students</p>
+                    <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
+                      <AnimatedNumber value={stats.eligibleStudents} />
+                    </h3>
+                  </DashboardCard>
+                  
+                  <DashboardCard className="relative overflow-hidden">
+                    <div className="absolute top-3 right-3 w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
+                      <BarChart className="w-6 h-6" />
                     </div>
-                    
-                    <div className="space-y-4">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Passing Score</p>
-                            <p className="text-xl font-semibold text-brand-600 dark:text-brand-400">
-                              {settings.passThreshold}%
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Eligible Students</p>
-                            <p className="text-xl font-semibold text-brand-600 dark:text-brand-400">
-                              {stats.eligibleStudents} of {stats.totalStudents}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Average Score</p>
-                          <p className="text-xl font-semibold">
-                            {stats.averageScore.toFixed(1)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
-                          <p className="text-xl font-semibold">
-                            {stats.passRate.toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {courseNames.length > 0 && (
-                        <div className="pt-2">
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Courses</p>
-                          <div className="flex flex-wrap gap-2">
-                            {courseNames.map(course => (
-                              <Badge key={course} variant="secondary">
-                                {course}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {settings.dateSince && (
-                        <div className="pt-2">
-                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 animate-fade-in">
-                            <span>Filtered since {settings.dateSince}</span>
-                          </div>
-                        </div>
-                      )}
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Average Score</p>
+                    <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
+                      <AnimatedNumber 
+                        value={stats.averageScore} 
+                        formatValue={(val) => `${val.toFixed(1)}%`} 
+                      />
+                    </h3>
+                  </DashboardCard>
+                  
+                  <DashboardCard className="relative overflow-hidden">
+                    <div className="absolute top-3 right-3 w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <TrendingUp className="w-6 h-6" />
                     </div>
-                  </div>
-                </DashboardCard>
-              </div>
-            </section>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
+                    <h3 className="text-3xl font-semibold mt-1 mb-2 text-slate-900 dark:text-white">
+                      <AnimatedNumber 
+                        value={stats.passRate} 
+                        formatValue={(val) => `${val.toFixed(1)}%`} 
+                      />
+                    </h3>
+                  </DashboardCard>
+                </div>
+              </section>
+            )}
             
-            <section className="section mt-8 mb-16">
-              <h2 className="section-title">Student Details</h2>
-              <DashboardCard>
-                <StudentTable 
-                  students={students} 
-                  passThreshold={settings.passThreshold} 
-                />
-              </DashboardCard>
-            </section>
-          </>
+            {/* Chart and Table Section - Visible only when students are loaded */}
+            {students.length > 0 && (
+              <>
+                <section className="section mt-8 animate-fade-in">
+                  <h2 className="section-title">Certification Distribution</h2>
+                  <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+                    <DashboardCard className="md:col-span-1 h-[300px] flex flex-col justify-center">
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={chartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={2}
+                              dataKey="value"
+                              animationDuration={800}
+                              animationBegin={0}
+                              animationEasing="ease-out"
+                            >
+                              {chartData.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={COLORS[index % COLORS.length]}
+                                  className="animate-fade-in"
+                                  fillOpacity={index === 0 ? 1 : 0.6}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(value) => [`${value} Students`, '']}
+                              contentStyle={{
+                                borderRadius: '0.5rem',
+                                border: 'none',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                padding: '0.5rem 1rem',
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex justify-center space-x-6">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-brand-600 mr-2"></div>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Eligible</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-slate-300 mr-2"></div>
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Not Eligible</span>
+                        </div>
+                      </div>
+                    </DashboardCard>
+                    
+                    <DashboardCard className="md:col-span-2">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-medium text-slate-900 dark:text-white">Certification Summary</h3>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Passing Score</p>
+                                <p className="text-xl font-semibold text-brand-600 dark:text-brand-400">
+                                  {settings.passThreshold}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Eligible Students</p>
+                                <p className="text-xl font-semibold text-brand-600 dark:text-brand-400">
+                                  {stats.eligibleStudents} of {stats.totalStudents}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Average Score</p>
+                              <p className="text-xl font-semibold">
+                                {stats.averageScore.toFixed(1)}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
+                              <p className="text-xl font-semibold">
+                                {stats.passRate.toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {courseNames.length > 0 && (
+                            <div className="pt-2">
+                              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Courses</p>
+                              <div className="flex flex-wrap gap-2">
+                                {courseNames.map(course => (
+                                  <Badge key={course} variant="secondary">
+                                    {course}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {settings.dateSince && (
+                            <div className="pt-2">
+                              <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 animate-fade-in">
+                                <span>Filtered since {settings.dateSince}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </DashboardCard>
+                  </div>
+                </section>
+                
+                <section className="section mt-8 mb-16 animate-fade-in">
+                  <h2 className="section-title">Student Details</h2>
+                  <DashboardCard>
+                    <StudentTable 
+                      students={students} 
+                      passThreshold={settings.passThreshold} 
+                    />
+                  </DashboardCard>
+                </section>
+              </>
+            )}
+          </div>
         )}
       </main>
     </div>

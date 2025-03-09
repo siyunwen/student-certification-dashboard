@@ -273,7 +273,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
             <p className="text-slate-600 dark:text-slate-400">
               Courses with complete data: {completeCoursesCount} of {Object.keys(courseStatus).length}
             </p>
-            {completeCoursesCount === 0 && files.length > 0 && (
+            {completeCoursesCount === 0 && files.length > 1 && Object.keys(courseStatus).length > 0 && (
               <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">
                 Upload both student and quiz files for at least one course to process data
               </p>
