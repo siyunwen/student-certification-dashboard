@@ -3,17 +3,21 @@ import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { ParsedFile } from '@/types/student';
+import { parseCSVData } from '@/utils/certificationUtils';
 
 interface FileUploadProps {
-  onFileLoaded: (content: string) => void;
+  onFilesLoaded: (files: ParsedFile[]) => void;
   className?: string;
 }
 
-const FileUpload = ({ onFileLoaded, className }: FileUploadProps) => {
+const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -25,38 +29,58 @@ const FileUpload = ({ onFileLoaded, className }: FileUploadProps) => {
     setIsDragging(false);
   };
 
-  const processFile = (file: File) => {
-    if (!file) return;
+  const processFiles = (newFiles: File[]) => {
+    if (!newFiles.length) return;
     
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-      toast.error('Please upload a CSV or TXT file');
-      return;
+    const validFiles = newFiles.filter(file => 
+      file.name.endsWith('.csv') || file.name.endsWith('.txt')
+    );
+    
+    if (validFiles.length !== newFiles.length) {
+      toast.error('Some files were skipped. Please upload only CSV or TXT files');
     }
     
-    setFile(file);
+    if (validFiles.length === 0) return;
+    
+    setFiles(prev => [...prev, ...validFiles]);
     setIsLoading(true);
     
-    const reader = new FileReader();
+    const filePromises = validFiles.map(file => {
+      return new Promise<ParsedFile>((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          try {
+            const content = event.target?.result as string;
+            const parsedFile = parseCSVData(file.name, content);
+            resolve(parsedFile);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        
+        reader.onerror = () => {
+          reject(new Error(`Failed to read file: ${file.name}`));
+        };
+        
+        reader.readAsText(file);
+      });
+    });
     
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        onFileLoaded(content);
-        toast.success('File uploaded successfully');
-      } catch (error) {
-        toast.error('Failed to process file');
-        console.error('Error processing file:', error);
-      } finally {
+    Promise.all(filePromises)
+      .then(results => {
+        const newParsedFiles = [...parsedFiles, ...results];
+        setParsedFiles(newParsedFiles);
+        onFilesLoaded(newParsedFiles);
+        toast.success(`${validFiles.length} file(s) uploaded successfully`);
+      })
+      .catch(error => {
+        toast.error('Failed to process one or more files');
+        console.error('Error processing files:', error);
+      })
+      .finally(() => {
         setIsLoading(false);
-      }
-    };
-    
-    reader.onerror = () => {
-      toast.error('Failed to read file');
-      setIsLoading(false);
-    };
-    
-    reader.readAsText(file);
+      });
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -64,13 +88,15 @@ const FileUpload = ({ onFileLoaded, className }: FileUploadProps) => {
     setIsDragging(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      processFiles(droppedFiles);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      const selectedFiles = Array.from(e.target.files);
+      processFiles(selectedFiles);
     }
   };
 
@@ -78,8 +104,21 @@ const FileUpload = ({ onFileLoaded, className }: FileUploadProps) => {
     fileInputRef.current?.click();
   };
 
-  const removeFile = () => {
-    setFile(null);
+  const removeFile = (index: number) => {
+    const newFiles = [...files];
+    newFiles.splice(index, 1);
+    setFiles(newFiles);
+    
+    const newParsedFiles = [...parsedFiles];
+    newParsedFiles.splice(index, 1);
+    setParsedFiles(newParsedFiles);
+    onFilesLoaded(newParsedFiles);
+  };
+
+  const clearAllFiles = () => {
+    setFiles([]);
+    setParsedFiles([]);
+    onFilesLoaded([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -92,72 +131,107 @@ const FileUpload = ({ onFileLoaded, className }: FileUploadProps) => {
         ref={fileInputRef}
         onChange={handleFileChange}
         accept=".csv,.txt"
+        multiple
         className="hidden"
       />
 
-      {!file ? (
-        <div
-          className={cn(
-            'border-2 border-dashed rounded-xl p-8 transition-all duration-200 bg-slate-50/50 dark:bg-slate-900/20',
-            isDragging 
-              ? 'border-brand-400 bg-brand-50/30 dark:bg-brand-900/10' 
-              : 'border-slate-200 dark:border-slate-800',
-            'hover:border-brand-300 hover:bg-brand-50/20 dark:hover:bg-brand-900/5',
-            'cursor-pointer animate-fade-in'
-          )}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={handleClick}
-        >
-          <div className="flex flex-col items-center justify-center space-y-4 text-center">
-            <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-base font-medium text-slate-900 dark:text-slate-200">
-                Drag and drop your student data file
-              </p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                or click to browse (CSV or TXT format)
-              </p>
-            </div>
+      <div
+        className={cn(
+          'border-2 border-dashed rounded-xl p-8 transition-all duration-200 bg-slate-50/50 dark:bg-slate-900/20',
+          isDragging 
+            ? 'border-brand-400 bg-brand-50/30 dark:bg-brand-900/10' 
+            : 'border-slate-200 dark:border-slate-800',
+          'hover:border-brand-300 hover:bg-brand-50/20 dark:hover:bg-brand-900/5',
+          'cursor-pointer animate-fade-in'
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleClick}
+      >
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
+            <UploadCloud className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-base font-medium text-slate-900 dark:text-slate-200">
+              Drag and drop your student and quiz files
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              or click to browse (CSV or TXT format)
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              You'll need both student and quiz files for complete data
+            </p>
           </div>
         </div>
-      ) : (
-        <div className="border rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/20 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-brand-100 dark:bg-brand-900/30 rounded-lg flex items-center justify-center text-brand-600 dark:text-brand-400">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-200 truncate max-w-[200px] sm:max-w-xs">
-                  {file.name}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {(file.size / 1024).toFixed(2)} KB
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {isLoading ? (
-                <div className="w-6 h-6 border-2 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin" />
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile();
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+      </div>
+
+      {files.length > 0 && (
+        <div className="mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <h4 className="text-sm font-medium text-slate-900 dark:text-slate-200">
+              Uploaded Files ({files.length})
+            </h4>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={clearAllFiles}
+              className="text-xs text-slate-500 hover:text-red-500"
+            >
+              Clear All
+            </Button>
           </div>
+          
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+            {files.map((file, index) => (
+              <div 
+                key={index} 
+                className="border rounded-lg p-3 bg-slate-50/50 dark:bg-slate-900/20 animate-fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 rounded-lg flex items-center justify-center text-brand-600 dark:text-brand-400">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-200 truncate max-w-[180px] sm:max-w-xs">
+                        {file.name}
+                      </p>
+                      <div className="flex items-center mt-1">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-2">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </span>
+                        {parsedFiles[index] && (
+                          <Badge variant={parsedFiles[index].type === 'student' ? 'default' : 'secondary'} className="text-xs">
+                            {parsedFiles[index].type === 'student' ? 'Student Data' : 'Quiz Scores'}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(index);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="flex justify-center items-center mt-4">
+          <div className="w-5 h-5 border-2 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mr-2" />
+          <span className="text-sm text-slate-600 dark:text-slate-400">Processing files...</span>
         </div>
       )}
     </div>

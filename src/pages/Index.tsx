@@ -6,17 +6,23 @@ import FileUpload from '@/components/FileUpload';
 import CertificationSettings from '@/components/CertificationSettings';
 import StudentTable from '@/components/StudentTable';
 import AnimatedNumber from '@/components/AnimatedNumber';
-import { Student, CertificationSettings as SettingsType, CertificationStats } from '@/types/student';
-import { parseCSVData, calculateCertificationStats, getEligibleStudents } from '@/utils/certificationUtils';
+import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile } from '@/types/student';
+import { 
+  calculateCertificationStats,
+  getEligibleStudents,
+  combineStudentAndQuizData
+} from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Award, Users, BarChart, TrendingUp, Download } from 'lucide-react';
+import { Award, Users, BarChart, TrendingUp, Download, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 const COLORS = ['#2563eb', '#e5e7eb'];
 
 const Index = () => {
   const [students, setStudents] = useState<Student[]>([]);
+  const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
   const [settings, setSettings] = useState<SettingsType>({
     passThreshold: 70,
     dateSince: null
@@ -28,24 +34,49 @@ const Index = () => {
     passRate: 0
   });
   
+  // Track uploaded file types
+  const studentFilesCount = parsedFiles.filter(f => f.type === 'student').length;
+  const quizFilesCount = parsedFiles.filter(f => f.type === 'quiz').length;
+  
+  // Get unique course names
+  const courseNames = Array.from(new Set(
+    parsedFiles.map(file => file.courseName).filter(Boolean)
+  ));
+  
   // Recalculate stats when students or settings change
   useEffect(() => {
     setStats(calculateCertificationStats(students, settings));
   }, [students, settings]);
   
-  const handleFileLoaded = (content: string) => {
+  // Process files when they are uploaded
+  useEffect(() => {
+    if (parsedFiles.length > 0) {
+      processFiles();
+    }
+  }, [parsedFiles]);
+  
+  const handleFilesLoaded = (files: ParsedFile[]) => {
+    setParsedFiles(files);
+  };
+  
+  const processFiles = () => {
     try {
-      const parsedStudents = parseCSVData(content);
-      setStudents(parsedStudents);
+      const studentFiles = parsedFiles.filter(f => f.type === 'student');
+      const quizFiles = parsedFiles.filter(f => f.type === 'quiz');
       
-      if (parsedStudents.length === 0) {
-        toast.warning('No student data could be extracted from the file');
+      // Combine student and quiz data
+      const combinedStudents = combineStudentAndQuizData(studentFiles, quizFiles);
+      
+      setStudents(combinedStudents);
+      
+      if (combinedStudents.length === 0) {
+        toast.warning('No student data could be extracted from the files');
       } else {
-        toast.success(`Loaded ${parsedStudents.length} students successfully`);
+        toast.success(`Processed ${combinedStudents.length} students successfully`);
       }
     } catch (error) {
-      console.error('Error parsing CSV data:', error);
-      toast.error('Failed to parse the file. Please check the format.');
+      console.error('Error processing files:', error);
+      toast.error('Failed to process the files. Please check the format.');
     }
   };
   
@@ -53,13 +84,14 @@ const Index = () => {
     const eligibleStudents = getEligibleStudents(students, settings);
     
     // Create CSV content
-    const headers = ['Name', 'Email', 'Score', 'Enrollment Date', 'Last Activity Date'];
+    const headers = ['First Name', 'Last Name', 'Email', 'Average Score', 'Last Activity Date', 'Course'];
     const rows = eligibleStudents.map(student => [
-      student.name,
+      student.firstName,
+      student.lastName,
       student.email,
-      student.score,
-      student.enrollmentDate,
-      student.lastActivityDate
+      student.score.toFixed(1),
+      student.lastActivityDate,
+      student.courseName
     ]);
     
     const csvContent = [
@@ -93,7 +125,7 @@ const Index = () => {
         <div className="page-container">
           <DashboardHeader
             title="Student Certification Dashboard"
-            description="Upload student data, customize certification criteria, and view eligible students"
+            description="Upload student data files and quiz scores, customize certification criteria, and view eligible students"
           >
             {students.length > 0 && (
               <Button
@@ -113,11 +145,30 @@ const Index = () => {
         {/* Setup Section */}
         <section className="grid gap-6 grid-cols-1 lg:grid-cols-2 mt-8">
           <DashboardCard 
-            title="1. Upload Student Data" 
-            subtitle="Upload a CSV file with student information"
+            title="1. Upload Course Files" 
+            subtitle="Upload both student data and quiz scores files"
             chip="Step 1"
           >
-            <FileUpload onFileLoaded={handleFileLoaded} />
+            <FileUpload onFilesLoaded={handleFilesLoaded} />
+            
+            {parsedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {studentFilesCount} Student {studentFilesCount === 1 ? 'File' : 'Files'}
+                </Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <BarChart className="h-3 w-3" />
+                  {quizFilesCount} Quiz {quizFilesCount === 1 ? 'File' : 'Files'}
+                </Badge>
+                {courseNames.length > 0 && (
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" />
+                    {courseNames.length} {courseNames.length === 1 ? 'Course' : 'Courses'}
+                  </Badge>
+                )}
+              </div>
+            )}
           </DashboardCard>
           
           <DashboardCard 
@@ -280,6 +331,19 @@ const Index = () => {
                         </div>
                       </div>
                       
+                      {courseNames.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Courses</p>
+                          <div className="flex flex-wrap gap-2">
+                            {courseNames.map(course => (
+                              <Badge key={course} variant="secondary">
+                                {course}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       {settings.dateSince && (
                         <div className="pt-2">
                           <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 animate-fade-in">
@@ -294,7 +358,7 @@ const Index = () => {
             </section>
             
             <section className="section mt-8 mb-16">
-              <h2 className="section-title">Eligible Students</h2>
+              <h2 className="section-title">Student Details</h2>
               <DashboardCard>
                 <StudentTable 
                   students={students} 

@@ -8,7 +8,8 @@ import {
   ChevronsLeft, 
   ChevronsRight,
   ArrowUpDown,
-  Award
+  Award,
+  ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,12 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Student } from '@/types/student';
+import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface StudentTableProps {
   students: Student[];
@@ -30,7 +37,7 @@ interface StudentTableProps {
   className?: string;
 }
 
-type SortField = 'name' | 'score' | 'enrollmentDate' | 'lastActivityDate';
+type SortField = 'fullName' | 'score' | 'lastActivityDate' | 'courseName';
 type SortOrder = 'asc' | 'desc';
 
 const StudentTable = ({ students, passThreshold, className }: StudentTableProps) => {
@@ -40,25 +47,36 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [expandedStudents, setExpandedStudents] = useState<string[]>([]);
   
-  // Filter students by search term
-  const filteredStudents = students.filter((student) => 
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Get unique course names
+  const courseNames = Array.from(new Set(students.map(s => s.courseName))).filter(Boolean);
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
+
+  // Filter students by search term and course
+  const filteredStudents = students.filter((student) => {
+    const matchesSearch = 
+      student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCourse = selectedCourse ? student.courseName === selectedCourse : true;
+    
+    return matchesSearch && matchesCourse;
+  });
   
   // Sort students
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     let comparison = 0;
     
-    if (sortField === 'name') {
-      comparison = a.name.localeCompare(b.name);
+    if (sortField === 'fullName') {
+      comparison = a.fullName.localeCompare(b.fullName);
     } else if (sortField === 'score') {
       comparison = a.score - b.score;
-    } else if (sortField === 'enrollmentDate') {
-      comparison = new Date(a.enrollmentDate).getTime() - new Date(b.enrollmentDate).getTime();
     } else if (sortField === 'lastActivityDate') {
       comparison = new Date(a.lastActivityDate).getTime() - new Date(b.lastActivityDate).getTime();
+    } else if (sortField === 'courseName') {
+      comparison = a.courseName.localeCompare(b.courseName);
     }
     
     return sortOrder === 'asc' ? comparison : -comparison;
@@ -94,6 +112,14 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     }
   };
   
+  const toggleExpandStudent = (id: string) => {
+    if (expandedStudents.includes(id)) {
+      setExpandedStudents(expandedStudents.filter(s => s !== id));
+    } else {
+      setExpandedStudents([...expandedStudents, id]);
+    }
+  };
+  
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3" />;
     return sortOrder === 'asc' 
@@ -104,12 +130,28 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   return (
     <div className={className}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-        <Input
-          placeholder="Search by name or email..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-xs"
-        />
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <Input
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-xs"
+          />
+          
+          {courseNames.length > 0 && (
+            <select
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700"
+            >
+              <option value="">All Courses</option>
+              {courseNames.map(course => (
+                <option key={course} value={course}>{course}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        
         <div className="text-sm text-slate-500">
           {selectedStudents.length > 0 ? (
             <span>{selectedStudents.length} selected</span>
@@ -129,12 +171,13 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                   onCheckedChange={toggleSelectAll}
                 />
               </TableHead>
+              <TableHead className="w-10"></TableHead>
               <TableHead 
                 className="cursor-pointer hover:text-brand-600 transition-colors"
-                onClick={() => handleSort('name')}
+                onClick={() => handleSort('fullName')}
               >
                 <div className="flex items-center">
-                  Name {renderSortIcon('name')}
+                  Name {renderSortIcon('fullName')}
                 </div>
               </TableHead>
               <TableHead 
@@ -142,16 +185,16 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                 onClick={() => handleSort('score')}
               >
                 <div className="flex items-center justify-end">
-                  Score {renderSortIcon('score')}
+                  Avg. Score {renderSortIcon('score')}
                 </div>
               </TableHead>
               <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead 
                 className="hidden md:table-cell cursor-pointer hover:text-brand-600 transition-colors"
-                onClick={() => handleSort('enrollmentDate')}
+                onClick={() => handleSort('courseName')}
               >
                 <div className="flex items-center">
-                  Enrollment {renderSortIcon('enrollmentDate')}
+                  Course {renderSortIcon('courseName')}
                 </div>
               </TableHead>
               <TableHead 
@@ -167,62 +210,110 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
           <TableBody>
             {paginatedStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={7} className="text-center py-8 text-slate-500">
                   No students found
                 </TableCell>
               </TableRow>
             ) : (
               paginatedStudents.map((student) => {
                 const isPassing = student.score >= passThreshold && student.courseCompleted;
+                const isExpanded = expandedStudents.includes(student.id);
                 
                 return (
-                  <TableRow key={student.id} className="group animate-fade-in">
-                    <TableCell>
-                      <Checkbox 
-                        checked={selectedStudents.includes(student.id)}
-                        onCheckedChange={() => toggleSelectStudent(student.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{student.name}</div>
-                      <div className="text-sm text-slate-500 truncate max-w-[150px] sm:max-w-xs">
-                        {student.email}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      <span 
-                        className={`
-                          ${isPassing 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : 'text-slate-600 dark:text-slate-400'
-                          }
-                        `}
-                      >
-                        {student.score}%
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      <div className="flex items-center">
-                        {isPassing ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-green-500 mr-1.5" />
-                            <span className="text-green-700 dark:text-green-400 text-sm font-medium">Eligible</span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
-                            <span className="text-slate-500 text-sm">Not eligible</span>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-slate-600 dark:text-slate-400 text-sm">
-                      {format(new Date(student.enrollmentDate), 'MMM d, yyyy')}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
-                      {format(new Date(student.lastActivityDate), 'MMM d, yyyy')}
-                    </TableCell>
-                  </TableRow>
+                  <React.Fragment key={student.id}>
+                    <TableRow className={`group animate-fade-in ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/30' : ''}`}>
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedStudents.includes(student.id)}
+                          onCheckedChange={() => toggleSelectStudent(student.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="p-0 w-10">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => toggleExpandStudent(student.id)}
+                        >
+                          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{student.firstName} {student.lastName}</div>
+                        <div className="text-sm text-slate-500 truncate max-w-[150px] sm:max-w-xs">
+                          {student.email}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        <span 
+                          className={`
+                            ${isPassing 
+                              ? 'text-green-600 dark:text-green-400' 
+                              : 'text-slate-600 dark:text-slate-400'
+                            }
+                          `}
+                        >
+                          {student.score.toFixed(1)}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex items-center">
+                          {isPassing ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-green-500 mr-1.5" />
+                              <span className="text-green-700 dark:text-green-400 text-sm font-medium">Eligible</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
+                              <span className="text-slate-500 text-sm">Not eligible</span>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="outline" className="font-normal">
+                          {student.courseName || 'Unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
+                        {format(new Date(student.lastActivityDate), 'MMM d, yyyy')}
+                      </TableCell>
+                    </TableRow>
+                    
+                    {isExpanded && (
+                      <TableRow className="bg-slate-50 dark:bg-slate-800/30">
+                        <TableCell colSpan={7} className="p-0">
+                          <div className="p-4">
+                            <h4 className="text-sm font-medium mb-2">Quiz Scores</h4>
+                            {student.quizScores.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                {student.quizScores.map((quiz, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"
+                                  >
+                                    <span className="text-sm truncate mr-2" title={quiz.quizName}>
+                                      {quiz.quizName}
+                                    </span>
+                                    <span 
+                                      className={`text-sm font-medium ${
+                                        quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                                      }`}
+                                    >
+                                      {quiz.score.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-500 italic">No quiz scores available</p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}

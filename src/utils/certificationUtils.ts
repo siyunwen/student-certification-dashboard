@@ -1,5 +1,5 @@
 
-import { Student, CertificationSettings, CertificationStats } from '../types/student';
+import { Student, CertificationSettings, CertificationStats, ParsedFile } from '../types/student';
 
 export const isEligibleForCertification = (
   student: Student,
@@ -58,33 +58,155 @@ export const calculateCertificationStats = (
   };
 };
 
-export const parseCSVData = (csvContent: string): Student[] => {
-  // Split by lines and get headers
-  const lines = csvContent.trim().split('\n');
-  if (lines.length <= 1) return [];
+export const extractCourseNameFromFilename = (filename: string): string => {
+  // Extract the course name from filenames like "aifi_301_quiz_scores"
+  const parts = filename.split('_');
+  
+  // Remove the last part if it's "quiz_scores" or "students"
+  if (parts.length > 2 && (parts[parts.length - 1] === 'scores' || parts[parts.length - 1] === 'students')) {
+    parts.pop();
+    if (parts[parts.length - 1] === 'quiz') {
+      parts.pop();
+    }
+  }
+  
+  return parts.join('_');
+};
+
+export const parseFileContent = (filename: string, content: string): ParsedFile => {
+  const lines = content.trim().split('\n');
+  if (lines.length <= 1) {
+    return { type: 'student', courseName: '', data: [] };
+  }
   
   const headers = lines[0].split(',');
   
-  // Find the indices of required columns
-  const nameIndex = headers.findIndex(h => h.toLowerCase().includes('name'));
-  const emailIndex = headers.findIndex(h => h.toLowerCase().includes('email'));
-  const scoreIndex = headers.findIndex(h => h.toLowerCase().includes('score'));
-  const completedIndex = headers.findIndex(h => h.toLowerCase().includes('complete'));
-  const enrollmentIndex = headers.findIndex(h => h.toLowerCase().includes('enroll'));
-  const activityIndex = headers.findIndex(h => h.toLowerCase().includes('activity') || h.toLowerCase().includes('last'));
+  // Determine file type based on the headers or filename
+  const isQuizFile = filename.toLowerCase().includes('quiz') || headers.includes('student');
+  const type = isQuizFile ? 'quiz' : 'student';
   
-  // Parse data rows
-  return lines.slice(1).map((line, index) => {
+  // Extract course name from filename
+  const courseName = extractCourseNameFromFilename(filename);
+  
+  // Parse data based on file type
+  const data = lines.slice(1).map(line => {
     const values = line.split(',');
+    const row: Record<string, any> = {};
     
-    return {
-      id: `student-${index}`,
-      name: nameIndex >= 0 ? values[nameIndex].trim() : `Student ${index + 1}`,
-      email: emailIndex >= 0 ? values[emailIndex].trim() : `student${index + 1}@example.com`,
-      score: scoreIndex >= 0 ? parseFloat(values[scoreIndex]) : 0,
-      courseCompleted: completedIndex >= 0 ? values[completedIndex].toLowerCase() === 'true' || values[completedIndex] === '1' : true,
-      enrollmentDate: enrollmentIndex >= 0 ? values[enrollmentIndex].trim() : new Date().toISOString().split('T')[0],
-      lastActivityDate: activityIndex >= 0 ? values[activityIndex].trim() : new Date().toISOString().split('T')[0]
-    };
+    headers.forEach((header, index) => {
+      if (index < values.length) {
+        row[header.trim()] = values[index].trim();
+      }
+    });
+    
+    return row;
   });
+  
+  return { type, courseName, data };
 };
+
+export const parseStudentName = (name: string, isLastFirstFormat: boolean): { firstName: string, lastName: string } => {
+  if (isLastFirstFormat) {
+    // Format: "Last, First"
+    const parts = name.split(',').map(part => part.trim());
+    return {
+      firstName: parts[1] || '',
+      lastName: parts[0] || ''
+    };
+  } else {
+    // Format: "First Last"
+    const parts = name.split(' ');
+    return {
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || ''
+    };
+  }
+};
+
+export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles: ParsedFile[]): Student[] => {
+  const students: Student[] = [];
+  const studentMap: Record<string, any> = {};
+  
+  // Process student files
+  studentFiles.forEach(studentFile => {
+    studentFile.data.forEach(studentData => {
+      const name = studentData.name || '';
+      const { firstName, lastName } = parseStudentName(name, false);
+      const email = studentData.email || '';
+      const lastActivityDate = studentData.last_interaction ? 
+        studentData.last_interaction.split(' ')[0] : // Extract date part only
+        new Date().toISOString().split('T')[0];
+      
+      // Create a key using email
+      const key = email.toLowerCase();
+      
+      if (!studentMap[key]) {
+        studentMap[key] = {
+          id: `student-${students.length}`,
+          firstName,
+          lastName,
+          fullName: `${firstName} ${lastName}`,
+          email,
+          score: 0, // Will be calculated from quiz scores
+          quizScores: [],
+          courseCompleted: true, // Default to true
+          enrollmentDate: new Date().toISOString().split('T')[0], // Default to today
+          lastActivityDate,
+          courseName: studentFile.courseName
+        };
+      }
+    });
+  });
+  
+  // Process quiz files
+  quizFiles.forEach(quizFile => {
+    quizFile.data.forEach(quizData => {
+      const name = quizData.student || '';
+      const { firstName, lastName } = parseStudentName(name, true);
+      const fullName = `${firstName} ${lastName}`;
+      
+      // Find corresponding student by matching name
+      let matchedStudent = null;
+      
+      // Try to find by full name
+      for (const key in studentMap) {
+        const student = studentMap[key];
+        if (student.fullName.toLowerCase() === fullName.toLowerCase() ||
+            (`${student.lastName}, ${student.firstName}`).toLowerCase() === name.toLowerCase()) {
+          matchedStudent = student;
+          break;
+        }
+      }
+      
+      if (matchedStudent) {
+        // Add quiz scores
+        Object.keys(quizData).forEach(key => {
+          if (key !== 'student' && !isNaN(Number(quizData[key]))) {
+            matchedStudent.quizScores.push({
+              quizName: key,
+              score: Number(quizData[key])
+            });
+          }
+        });
+        
+        // Calculate average score
+        if (matchedStudent.quizScores.length > 0) {
+          const total = matchedStudent.quizScores.reduce((sum, quiz) => sum + quiz.score, 0);
+          matchedStudent.score = total / matchedStudent.quizScores.length;
+        }
+      }
+    });
+  });
+  
+  // Convert map to array
+  for (const key in studentMap) {
+    students.push(studentMap[key] as Student);
+  }
+  
+  return students;
+};
+
+export const parseCSVData = (filename: string, csvContent: string): ParsedFile => {
+  return parseFileContent(filename, csvContent);
+};
+
