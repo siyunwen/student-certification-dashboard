@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -23,7 +22,21 @@ export const getEligibleStudents = (
   students: Student[],
   settings: CertificationSettings
 ): Student[] => {
-  return students.filter(student => isEligibleForCertification(student, settings));
+  const eligible = students.filter(student => isEligibleForCertification(student, settings));
+  
+  // Add diagnostics for troubleshooting
+  if (eligible.length === 0 && students.length > 0) {
+    console.log("WARNING: No eligible students found. Checking what's causing the issue...");
+    
+    const scoreIssues = students.filter(s => s.score < settings.passThreshold).length;
+    const completionIssues = students.filter(s => !s.courseCompleted).length;
+    
+    console.log(`Students failing score requirement: ${scoreIssues}`);
+    console.log(`Students failing completion requirement: ${completionIssues}`);
+    console.log("Sample student scores:", students.slice(0, 3).map(s => s.score));
+  }
+  
+  return eligible;
 };
 
 export const calculateCertificationStats = (
@@ -137,18 +150,46 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
   }
 };
 
+export const isNotCompletedQuiz = (value: string | number): boolean => {
+  if (typeof value === 'string') {
+    const lowerValue = value.toLowerCase();
+    return (
+      lowerValue.includes('not') || 
+      lowerValue.includes('n/a') || 
+      lowerValue.includes('incomplete') ||
+      lowerValue === '' ||
+      lowerValue === '-'
+    );
+  }
+  return false;
+};
+
 export const parseScoreValue = (value: string | number): number => {
-  if (typeof value === 'number') return value;
+  console.log(`Parsing score value: "${value}" (${typeof value})`);
+  
+  // Handle already numeric values
+  if (typeof value === 'number') {
+    // If it's a decimal between 0-1, convert to percentage (0-100)
+    if (value > 0 && value <= 1) {
+      console.log(`Converting decimal ${value} to percentage: ${value * 100}`);
+      return value * 100;
+    }
+    return value;
+  }
   
   // Handle empty values
-  if (!value || value.trim() === '') return 0;
+  if (!value || value.trim() === '') {
+    console.log('Empty value, returning 0');
+    return 0;
+  }
   
   // Handle "not finished" or similar non-numeric indicators
   const lowerValue = value.toString().toLowerCase();
   if (lowerValue.includes('not') || 
       lowerValue.includes('n/a') ||
-      lowerValue.includes('incomplete')) {
-    console.log(`Treating non-numeric value "${value}" as 0`);
+      lowerValue.includes('incomplete') ||
+      lowerValue === '-') {
+    console.log(`Non-numeric value "${value}", returning 0`);
     return 0;
   }
   
@@ -164,6 +205,13 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
+  // If value is in decimal format (between 0 and 1), convert to percentage
+  if (numberValue > 0 && numberValue <= 1) {
+    console.log(`Converting decimal ${numberValue} to percentage: ${numberValue * 100}`);
+    return numberValue * 100;
+  }
+  
+  console.log(`Final parsed score: ${numberValue}`);
   return numberValue;
 };
 
@@ -278,12 +326,19 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
           email,
           score: 0, // Will be calculated from quiz scores
           quizScores: [],
-          courseCompleted: true, // Default to true
+          courseCompleted: false, // Default to false until we verify completion
           enrollmentDate: new Date().toISOString().split('T')[0], // Default to today
           lastActivityDate,
           courseName: studentFile.courseName
         };
         console.log(`Added student: ${fullName} (${email}) for course ${studentFile.courseName}`);
+      }
+      
+      // Create email map for more reliable matching
+      const emailMap: Record<string, any> = {};
+      for (const key in studentMap) {
+        const student = studentMap[key];
+        emailMap[student.email.toLowerCase()] = student;
       }
     });
   });
@@ -304,6 +359,22 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         studentField = 'name';
       }
       
+      // Check for email-based matching first
+      if (quizData.email) {
+        const email = quizData.email.toLowerCase();
+        
+        // Try to find direct email match
+        for (const key in studentMap) {
+          if (key === email) {
+            const student = studentMap[key];
+            console.log(`Found email match for ${email}`);
+            processQuizScores(student, quizData, studentField, quizFile.courseName);
+            return;
+          }
+        }
+      }
+      
+      // If email matching failed, try name-based matching
       const name = quizData[studentField] || '';
       console.log(`Processing quiz scores for student: "${name}"`);
       
@@ -363,64 +434,86 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       }
       
       if (matchedStudent) {
-        // Extract all keys from quiz data except the student name field
-        // All other fields are considered quiz scores
-        const quizKeys = Object.keys(quizData).filter(key => key !== studentField && key !== 'overall_proficiency');
-        console.log(`${name} has ${quizKeys.length} quiz scores to process`);
-        
-        // DEBUG: Print all quiz scores for this student
-        quizKeys.forEach(key => {
-          console.log(`DEBUG: Quiz "${key}" - Raw value: "${quizData[key]}"`);
-        });
-        
-        if (quizKeys.length === 0) {
-          console.log(`WARNING: No quiz scores found for ${name}`);
-        }
-        
-        // Reset quiz scores to make sure we don't duplicate
-        matchedStudent.quizScores = [];
-        let validScoreCount = 0;
-        let totalScore = 0;
-        
-        quizKeys.forEach(key => {
-          // Get the original value before parsing
-          const originalValue = quizData[key];
-          console.log(`Quiz "${key}" - Original value: "${originalValue}"`);
-          
-          // Convert quiz score to number with improved parsing
-          const scoreValue = parseScoreValue(originalValue);
-          console.log(`Quiz "${key}" - Parsed score: ${scoreValue}`);
-          
-          // Only count scores > 0 for average calculation
-          if (scoreValue > 0) {
-            validScoreCount++;
-            totalScore += scoreValue;
-            console.log(`Added valid score: ${scoreValue} to total (now ${totalScore})`);
-          }
-          
-          matchedStudent.quizScores.push({
-            quizName: key,
-            score: scoreValue
-          });
-        });
-        
-        // Calculate average score only if there are valid scores
-        if (validScoreCount > 0) {
-          matchedStudent.score = totalScore / validScoreCount;
-          console.log(`Calculated average score for ${matchedStudent.fullName}: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores, total: ${totalScore})`);
-        } else {
-          matchedStudent.score = 0;
-          console.log(`No valid scores for ${matchedStudent.fullName}, setting average to 0`);
-        }
-        
-        // DEBUG: Print the final quiz scores and average
-        console.log(`DEBUG: Final quiz scores for ${matchedStudent.fullName}:`, matchedStudent.quizScores);
-        console.log(`DEBUG: Final average score: ${matchedStudent.score}`);
+        processQuizScores(matchedStudent, quizData, studentField, quizFile.courseName);
       } else {
         console.log(`No matching student found for: ${name}`);
       }
     });
   });
+  
+  // Helper function to process quiz scores for a student
+  function processQuizScores(student: any, quizData: any, studentField: string, courseName: string) {
+    // Extract all keys from quiz data except the student name field
+    // All other fields are considered quiz scores except special fields
+    const quizKeys = Object.keys(quizData).filter(key => 
+      key !== studentField && 
+      key !== 'overall_proficiency' && 
+      key !== 'email'
+    );
+    
+    console.log(`${student.fullName} has ${quizKeys.length} quiz scores to process`);
+    
+    // DEBUG: Print all quiz scores for this student
+    quizKeys.forEach(key => {
+      console.log(`DEBUG: Quiz "${key}" - Raw value: "${quizData[key]}"`);
+    });
+    
+    if (quizKeys.length === 0) {
+      console.log(`WARNING: No quiz scores found for ${student.fullName}`);
+    }
+    
+    // Reset quiz scores to make sure we don't duplicate
+    student.quizScores = [];
+    let validScoreCount = 0;
+    let totalScore = 0;
+    let allQuizzesCompleted = true;
+    
+    quizKeys.forEach(key => {
+      // Get the original value before parsing
+      const originalValue = quizData[key];
+      console.log(`Quiz "${key}" - Original value: "${originalValue}"`);
+      
+      // Check if quiz is not completed
+      const isCompleted = !isNotCompletedQuiz(originalValue);
+      if (!isCompleted) {
+        allQuizzesCompleted = false;
+        console.log(`Quiz "${key}" is marked as not completed`);
+      }
+      
+      // Convert quiz score to number with improved parsing
+      const scoreValue = parseScoreValue(originalValue);
+      console.log(`Quiz "${key}" - Parsed score: ${scoreValue}`);
+      
+      // Only count scores > 0 for average calculation
+      if (scoreValue > 0) {
+        validScoreCount++;
+        totalScore += scoreValue;
+        console.log(`Added valid score: ${scoreValue} to total (now ${totalScore})`);
+      }
+      
+      student.quizScores.push({
+        quizName: key,
+        score: scoreValue
+      });
+    });
+    
+    // Calculate average score only if there are valid scores
+    if (validScoreCount > 0) {
+      student.score = totalScore / validScoreCount;
+      console.log(`Calculated average score for ${student.fullName}: ${student.score.toFixed(1)}% (from ${validScoreCount} valid scores, total: ${totalScore})`);
+    } else {
+      student.score = 0;
+      console.log(`No valid scores for ${student.fullName}, setting average to 0`);
+    }
+    
+    // Mark student as having completed the course if all quizzes are completed
+    student.courseCompleted = allQuizzesCompleted && validScoreCount > 0;
+    console.log(`Course completion status for ${student.fullName}: ${student.courseCompleted ? 'Completed' : 'Not completed'}`);
+    
+    // DEBUG: Print the final quiz scores and average
+    console.log(`DEBUG: Final quiz scores for ${student.fullName}:`, student.quizScores);
+    console.log(`DEBUG: Final average score: ${student.score}`);
+  }
   
   // Convert map to array
   for (const key in studentMap) {
@@ -465,7 +558,12 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
     // Sample the first quiz entry to check if we're correctly parsing quiz scores
     const firstEntry = result.data[0];
     // All fields except 'student' are considered quiz names with scores
-    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student' && key !== 'name' && key !== 'overall_proficiency');
+    const quizKeys = Object.keys(firstEntry).filter(key => 
+      key !== 'student' && 
+      key !== 'name' && 
+      key !== 'overall_proficiency' &&
+      key !== 'email'
+    );
     
     console.log(`Found ${quizKeys.length} potential quiz columns`);
     
@@ -479,3 +577,4 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
   
   return result;
 };
+
