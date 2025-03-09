@@ -11,9 +11,19 @@ export const isEligibleForCertification = (
   const completedCourse = student.courseCompleted;
   
   // Check if student activity is after the dateSince filter
-  const meetsDateRequirement = settings.dateSince 
-    ? new Date(student.lastActivityDate) >= new Date(settings.dateSince)
-    : true;
+  let meetsDateRequirement = true;
+  
+  if (settings.dateSince) {
+    const studentDate = new Date(student.lastActivityDate);
+    const filterDate = new Date(settings.dateSince);
+    meetsDateRequirement = studentDate >= filterDate;
+    
+    console.log(`Date filter check for ${student.fullName}:
+      Student date: ${studentDate.toISOString().split('T')[0]}
+      Filter date: ${filterDate.toISOString().split('T')[0]}
+      Result: ${meetsDateRequirement}
+    `);
+  }
   
   console.log(`Student ${student.fullName} eligibility check:
     - Score ${student.score.toFixed(1)}% >= ${settings.passThreshold}%: ${passedThreshold}
@@ -101,7 +111,17 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
     return { type: 'student', courseName: '', data: [] };
   }
   
-  const headers = lines[0].split(',');
+  // Handle CSV with quoted fields
+  const hasQuotes = lines[0].includes('"');
+  
+  let headers: string[];
+  if (hasQuotes) {
+    // Handle CSV with quoted fields - more complex parsing
+    headers = parseCSVLine(lines[0]);
+  } else {
+    // Simple CSV parsing
+    headers = lines[0].split(',').map(h => h.trim());
+  }
   
   // Determine file type based on the headers or filename
   const isQuizFile = filename.toLowerCase().includes('quiz') || headers.includes('student');
@@ -115,7 +135,7 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
   
   // Parse data based on file type
   const data = lines.slice(1).map(line => {
-    const values = line.split(',');
+    const values = hasQuotes ? parseCSVLine(line) : line.split(',').map(v => v.trim());
     const row: Record<string, any> = {};
     
     headers.forEach((header, index) => {
@@ -134,6 +154,30 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
   
   return { type, courseName, data };
 };
+
+// Function to parse CSV line with quoted fields
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let inQuote = false;
+  let currentValue = '';
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuote = !inQuote;
+    } else if (char === ',' && !inQuote) {
+      result.push(currentValue);
+      currentValue = '';
+    } else {
+      currentValue += char;
+    }
+  }
+  
+  // Add the last value
+  result.push(currentValue);
+  return result;
+}
 
 export const parseStudentName = (name: string, isLastFirstFormat: boolean): { firstName: string, lastName: string } => {
   if (!name || name.trim() === '') {
@@ -176,7 +220,7 @@ export const parseScoreValue = (value: string | number): number => {
   
   // Handle already numeric values
   if (typeof value === 'number') {
-    // If it's a decimal between 0-1, convert to percentage (0-100)
+    // Keep all scores as percentages (0-100)
     if (value > 0 && value <= 1) {
       const percentageValue = value * 100;
       console.log(`Converting decimal ${value} to percentage: ${percentageValue}`);

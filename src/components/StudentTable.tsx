@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   CheckCircle2, 
@@ -25,11 +24,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Student } from '@/types/student';
 import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 interface StudentTableProps {
   students: Student[];

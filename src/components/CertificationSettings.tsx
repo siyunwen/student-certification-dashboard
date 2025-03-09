@@ -30,15 +30,20 @@ const CertificationSettings = ({
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
-      console.log("Setting date filter to:", format(date, 'yyyy-MM-dd'));
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      console.log("Setting date filter to:", formattedDate);
+      
+      onSettingsChange({
+        ...settings,
+        dateSince: formattedDate
+      });
     } else {
       console.log("Clearing date filter");
+      onSettingsChange({
+        ...settings,
+        dateSince: null
+      });
     }
-    
-    onSettingsChange({
-      ...settings,
-      dateSince: date ? format(date, 'yyyy-MM-dd') : null
-    });
   };
 
   const clearDate = () => {
