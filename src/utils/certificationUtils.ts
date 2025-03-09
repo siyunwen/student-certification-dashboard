@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -135,8 +136,8 @@ export const parseScoreValue = (value: string | number): number => {
   // Handle empty values
   if (!value || value.trim() === '') return 0;
   
-  // Remove any non-numeric characters except decimal point
-  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  // Remove any non-numeric characters except decimal point and percentage
+  const cleanValue = value.toString().replace(/[^\d.%]/g, '').replace(/%$/, '');
   const numberValue = parseFloat(cleanValue);
   
   // Return 0 if NaN
@@ -178,8 +179,9 @@ export const isValidStudent = (student: any): boolean => {
     return false;
   }
   
-  // Filter out andrew.cmu.edu emails
-  if (student.email.toLowerCase().endsWith('andrew.cmu.edu')) {
+  // Filter out andrew.cmu.edu and cmu.edu emails
+  if (student.email.toLowerCase().endsWith('andrew.cmu.edu') || 
+      student.email.toLowerCase().endsWith('cmu.edu')) {
     return false;
   }
   
@@ -206,8 +208,9 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         return;
       }
       
-      // Skip andrew.cmu.edu emails
-      if (email.toLowerCase().endsWith('andrew.cmu.edu')) {
+      // Skip cmu.edu and andrew.cmu.edu emails
+      if (email.toLowerCase().endsWith('andrew.cmu.edu') || 
+          email.toLowerCase().endsWith('cmu.edu')) {
         return;
       }
       
@@ -261,7 +264,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         // Add quiz scores
         Object.keys(quizData).forEach(key => {
           if (key !== 'student') {
-            // Convert quiz score to number
+            // Convert quiz score to number with improved parsing
             const scoreValue = parseScoreValue(quizData[key]);
             
             matchedStudent.quizScores.push({
