@@ -365,7 +365,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       if (matchedStudent) {
         // Extract all keys from quiz data except the student name field
         // All other fields are considered quiz scores
-        const quizKeys = Object.keys(quizData).filter(key => key !== studentField);
+        const quizKeys = Object.keys(quizData).filter(key => key !== studentField && key !== 'overall_proficiency');
         console.log(`${name} has ${quizKeys.length} quiz scores to process`);
         
         // DEBUG: Print all quiz scores for this student
@@ -465,7 +465,7 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
     // Sample the first quiz entry to check if we're correctly parsing quiz scores
     const firstEntry = result.data[0];
     // All fields except 'student' are considered quiz names with scores
-    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student' && key !== 'name');
+    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student' && key !== 'name' && key !== 'overall_proficiency');
     
     console.log(`Found ${quizKeys.length} potential quiz columns`);
     
