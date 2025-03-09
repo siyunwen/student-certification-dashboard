@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -15,6 +14,13 @@ export const isEligibleForCertification = (
   const meetsDateRequirement = settings.dateSince 
     ? new Date(student.lastActivityDate) >= new Date(settings.dateSince)
     : true;
+  
+  console.log(`Student ${student.fullName} eligibility check:
+    - Score ${student.score.toFixed(1)}% >= ${settings.passThreshold}%: ${passedThreshold}
+    - Course completed: ${completedCourse}
+    - Active since ${settings.dateSince || 'any date'}: ${meetsDateRequirement}
+    - Last activity: ${student.lastActivityDate}
+  `);
   
   return passedThreshold && completedCourse && meetsDateRequirement;
 };

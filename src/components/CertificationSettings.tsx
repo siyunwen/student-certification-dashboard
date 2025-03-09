@@ -29,6 +29,12 @@ const CertificationSettings = ({
   };
 
   const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      console.log("Setting date filter to:", format(date, 'yyyy-MM-dd'));
+    } else {
+      console.log("Clearing date filter");
+    }
+    
     onSettingsChange({
       ...settings,
       dateSince: date ? format(date, 'yyyy-MM-dd') : null
@@ -36,6 +42,7 @@ const CertificationSettings = ({
   };
 
   const clearDate = () => {
+    console.log("Clearing date filter");
     onSettingsChange({
       ...settings,
       dateSince: null
