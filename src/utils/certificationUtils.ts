@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -171,8 +172,9 @@ export const parseScoreValue = (value: string | number): number => {
   if (typeof value === 'number') {
     // If it's a decimal between 0-1, convert to percentage (0-100)
     if (value > 0 && value <= 1) {
-      console.log(`Converting decimal ${value} to percentage: ${value * 100}`);
-      return value * 100;
+      const percentageValue = value * 100;
+      console.log(`Converting decimal ${value} to percentage: ${percentageValue}`);
+      return percentageValue;
     }
     return value;
   }
@@ -205,10 +207,11 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
-  // If value is in decimal format (between 0 and 1), convert to percentage
+  // Always store scores as percentages (0-100)
   if (numberValue > 0 && numberValue <= 1) {
-    console.log(`Converting decimal ${numberValue} to percentage: ${numberValue * 100}`);
-    return numberValue * 100;
+    const percentageValue = numberValue * 100;
+    console.log(`Converting decimal ${numberValue} to percentage: ${percentageValue}`);
+    return percentageValue;
   }
   
   console.log(`Final parsed score: ${numberValue}`);
@@ -333,15 +336,15 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         };
         console.log(`Added student: ${fullName} (${email}) for course ${studentFile.courseName}`);
       }
-      
-      // Create email map for more reliable matching
-      const emailMap: Record<string, any> = {};
-      for (const key in studentMap) {
-        const student = studentMap[key];
-        emailMap[student.email.toLowerCase()] = student;
-      }
     });
   });
+  
+  // Create email map for more reliable matching
+  const emailMap: Record<string, any> = {};
+  for (const key in studentMap) {
+    const student = studentMap[key];
+    emailMap[student.email.toLowerCase()] = student;
+  }
   
   // Process quiz files
   quizFiles.forEach(quizFile => {
@@ -364,13 +367,17 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         const email = quizData.email.toLowerCase();
         
         // Try to find direct email match
-        for (const key in studentMap) {
-          if (key === email) {
-            const student = studentMap[key];
-            console.log(`Found email match for ${email}`);
+        if (emailMap[email]) {
+          const student = emailMap[email];
+          console.log(`Found email match for ${email}`);
+          
+          // Only process if course names match
+          if (student.courseName === quizFile.courseName) {
             processQuizScores(student, quizData, studentField, quizFile.courseName);
-            return;
+          } else {
+            console.log(`Skipping - Course mismatch: student is in ${student.courseName}, quiz is for ${quizFile.courseName}`);
           }
+          return;
         }
       }
       
@@ -417,6 +424,12 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       // Try to find student by different name formats
       for (const key in studentMap) {
         const student = studentMap[key];
+        
+        // Skip if course doesn't match
+        if (student.courseName !== quizFile.courseName) {
+          continue;
+        }
+        
         const studentNormalizedName = student.normalizedName;
         
         // Try multiple formats to match
@@ -443,12 +456,19 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   
   // Helper function to process quiz scores for a student
   function processQuizScores(student: any, quizData: any, studentField: string, courseName: string) {
-    // Extract all keys from quiz data except the student name field
-    // All other fields are considered quiz scores except special fields
+    // Skip if course mismatch
+    if (student.courseName !== courseName) {
+      console.log(`Skipping - Course mismatch: student is in ${student.courseName}, quiz is for ${courseName}`);
+      return;
+    }
+    
+    // Extract all keys from quiz data except the student name field and special fields
     const quizKeys = Object.keys(quizData).filter(key => 
       key !== studentField && 
       key !== 'overall_proficiency' && 
-      key !== 'email'
+      key !== 'email' &&
+      key !== 'name' &&
+      key !== 'student'
     );
     
     console.log(`${student.fullName} has ${quizKeys.length} quiz scores to process`);
@@ -509,6 +529,16 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     // Mark student as having completed the course if all quizzes are completed
     student.courseCompleted = allQuizzesCompleted && validScoreCount > 0;
     console.log(`Course completion status for ${student.fullName}: ${student.courseCompleted ? 'Completed' : 'Not completed'}`);
+    
+    // Enhanced debugging
+    console.log(`
+    Student: ${student.fullName} (${student.email})
+    Course: ${student.courseName}
+    Score: ${student.score.toFixed(1)}%
+    Course Completed: ${student.courseCompleted}
+    Valid Quiz Scores: ${validScoreCount}
+    All Quizzes Completed: ${allQuizzesCompleted}
+    `);
     
     // DEBUG: Print the final quiz scores and average
     console.log(`DEBUG: Final quiz scores for ${student.fullName}:`, student.quizScores);
@@ -577,4 +607,3 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
   
   return result;
 };
-
