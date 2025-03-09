@@ -6,14 +6,15 @@ import FileUpload from '@/components/FileUpload';
 import CertificationSettings from '@/components/CertificationSettings';
 import StudentTable from '@/components/StudentTable';
 import AnimatedNumber from '@/components/AnimatedNumber';
-import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile } from '@/types/student';
+import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile, CourseData } from '@/types/student';
 import { 
   calculateCertificationStats,
   getEligibleStudents,
-  combineStudentAndQuizData
+  combineStudentAndQuizData,
+  groupFilesByCourse
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Award, Users, BarChart, TrendingUp, Download, BookOpen } from 'lucide-react';
+import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -34,14 +35,12 @@ const Index = () => {
     passRate: 0
   });
   
-  // Track uploaded file types
-  const studentFilesCount = parsedFiles.filter(f => f.type === 'student').length;
-  const quizFilesCount = parsedFiles.filter(f => f.type === 'quiz').length;
+  // Group files by course
+  const courseMap = groupFilesByCourse(parsedFiles);
+  const completeCoursesCount = Object.values(courseMap).filter(course => course.isComplete).length;
   
-  // Get unique course names
-  const courseNames = Array.from(new Set(
-    parsedFiles.map(file => file.courseName).filter(Boolean)
-  ));
+  // Get unique course names with complete data
+  const courseNames = Object.keys(courseMap).filter(name => courseMap[name].isComplete);
   
   // Recalculate stats when students or settings change
   useEffect(() => {
@@ -61,18 +60,37 @@ const Index = () => {
   
   const processFiles = () => {
     try {
-      const studentFiles = parsedFiles.filter(f => f.type === 'student');
-      const quizFiles = parsedFiles.filter(f => f.type === 'quiz');
+      // Get only the complete courses (with both student and quiz files)
+      const completeCourses = Object.entries(courseMap)
+        .filter(([_, course]) => course.isComplete)
+        .map(([_, course]) => ({
+          studentFile: course.studentFile!,
+          quizFile: course.quizFile!
+        }));
       
-      // Combine student and quiz data
-      const combinedStudents = combineStudentAndQuizData(studentFiles, quizFiles);
+      if (completeCourses.length === 0) {
+        // Don't process if no complete courses
+        if (parsedFiles.length > 0) {
+          toast.info('Upload both student and quiz files for at least one course');
+        }
+        setStudents([]);
+        return;
+      }
       
-      setStudents(combinedStudents);
+      // Process each complete course
+      const allStudents: Student[] = [];
       
-      if (combinedStudents.length === 0) {
-        toast.warning('No student data could be extracted from the files');
+      completeCourses.forEach(course => {
+        const courseStudents = combineStudentAndQuizData([course.studentFile], [course.quizFile]);
+        allStudents.push(...courseStudents);
+      });
+      
+      setStudents(allStudents);
+      
+      if (allStudents.length === 0) {
+        toast.warning('No valid student data could be extracted from the files');
       } else {
-        toast.success(`Processed ${combinedStudents.length} students successfully`);
+        toast.success(`Processed ${allStudents.length} students from ${completeCourses.length} courses`);
       }
     } catch (error) {
       console.error('Error processing files:', error);
@@ -146,7 +164,7 @@ const Index = () => {
         <section className="grid gap-6 grid-cols-1 lg:grid-cols-2 mt-8">
           <DashboardCard 
             title="1. Upload Course Files" 
-            subtitle="Upload both student data and quiz scores files"
+            subtitle="Upload both student data and quiz scores files for each course"
             chip="Step 1"
           >
             <FileUpload onFilesLoaded={handleFilesLoaded} />
@@ -155,18 +173,25 @@ const Index = () => {
               <div className="flex flex-wrap gap-2 mt-4">
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Users className="h-3 w-3" />
-                  {studentFilesCount} Student {studentFilesCount === 1 ? 'File' : 'Files'}
+                  {parsedFiles.filter(f => f.type === 'student').length} Student {parsedFiles.filter(f => f.type === 'student').length === 1 ? 'File' : 'Files'}
                 </Badge>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <BarChart className="h-3 w-3" />
-                  {quizFilesCount} Quiz {quizFilesCount === 1 ? 'File' : 'Files'}
+                  {parsedFiles.filter(f => f.type === 'quiz').length} Quiz {parsedFiles.filter(f => f.type === 'quiz').length === 1 ? 'File' : 'Files'}
                 </Badge>
                 {courseNames.length > 0 && (
                   <Badge variant="outline" className="flex items-center gap-1">
                     <BookOpen className="h-3 w-3" />
-                    {courseNames.length} {courseNames.length === 1 ? 'Course' : 'Courses'}
+                    {courseNames.length} Complete {courseNames.length === 1 ? 'Course' : 'Courses'}
                   </Badge>
                 )}
+              </div>
+            )}
+            
+            {parsedFiles.length > 0 && completeCoursesCount === 0 && (
+              <div className="mt-3 flex items-center text-amber-600 text-sm">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                <span>Upload both student and quiz files for the same course</span>
               </div>
             )}
           </DashboardCard>

@@ -1,5 +1,5 @@
 
-import { Student, CertificationSettings, CertificationStats, ParsedFile } from '../types/student';
+import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
   student: Student,
@@ -106,6 +106,10 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
 };
 
 export const parseStudentName = (name: string, isLastFirstFormat: boolean): { firstName: string, lastName: string } => {
+  if (!name || name.trim() === '') {
+    return { firstName: '', lastName: '' };
+  }
+  
   if (isLastFirstFormat) {
     // Format: "Last, First"
     const parts = name.split(',').map(part => part.trim());
@@ -123,9 +127,68 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
   }
 };
 
+// Convert string value to number, handling various formats
+export const parseScoreValue = (value: string | number): number => {
+  if (typeof value === 'number') return value;
+  
+  // Handle empty values
+  if (!value || value.trim() === '') return 0;
+  
+  // Remove any non-numeric characters except decimal point
+  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  const numberValue = parseFloat(cleanValue);
+  
+  // Return 0 if NaN
+  return isNaN(numberValue) ? 0 : numberValue;
+};
+
+// Group files by course name and check if both student and quiz files are present
+export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseData> => {
+  const courseMap: Record<string, CourseData> = {};
+  
+  files.forEach(file => {
+    if (!file.courseName) return;
+    
+    if (!courseMap[file.courseName]) {
+      courseMap[file.courseName] = {
+        isComplete: false
+      };
+    }
+    
+    if (file.type === 'student') {
+      courseMap[file.courseName].studentFile = file;
+    } else if (file.type === 'quiz') {
+      courseMap[file.courseName].quizFile = file;
+    }
+    
+    // Check if course has both files
+    courseMap[file.courseName].isComplete = 
+      !!courseMap[file.courseName].studentFile && 
+      !!courseMap[file.courseName].quizFile;
+  });
+  
+  return courseMap;
+};
+
+// Filter out test accounts and invalid data
+export const isValidStudent = (student: any): boolean => {
+  // Check if student has name and email
+  if (!student.firstName || !student.lastName || !student.email) {
+    return false;
+  }
+  
+  // Filter out andrew.cmu.edu emails
+  if (student.email.toLowerCase().endsWith('andrew.cmu.edu')) {
+    return false;
+  }
+  
+  return true;
+};
+
 export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles: ParsedFile[]): Student[] => {
   const students: Student[] = [];
   const studentMap: Record<string, any> = {};
+  let studentIdCounter = 0;
   
   // Process student files
   studentFiles.forEach(studentFile => {
@@ -137,12 +200,22 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         studentData.last_interaction.split(' ')[0] : // Extract date part only
         new Date().toISOString().split('T')[0];
       
+      // Skip invalid entries
+      if (!firstName || !lastName || !email) {
+        return;
+      }
+      
+      // Skip andrew.cmu.edu emails
+      if (email.toLowerCase().endsWith('andrew.cmu.edu')) {
+        return;
+      }
+      
       // Create a key using email
       const key = email.toLowerCase();
       
       if (!studentMap[key]) {
         studentMap[key] = {
-          id: `student-${students.length}`,
+          id: `student-${studentIdCounter++}`,
           firstName,
           lastName,
           fullName: `${firstName} ${lastName}`,
@@ -165,6 +238,11 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       const { firstName, lastName } = parseStudentName(name, true);
       const fullName = `${firstName} ${lastName}`;
       
+      // Skip invalid entries
+      if (!firstName && !lastName) {
+        return;
+      }
+      
       // Find corresponding student by matching name
       let matchedStudent = null;
       
@@ -181,10 +259,13 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       if (matchedStudent) {
         // Add quiz scores
         Object.keys(quizData).forEach(key => {
-          if (key !== 'student' && !isNaN(Number(quizData[key]))) {
+          if (key !== 'student') {
+            // Convert quiz score to number
+            const scoreValue = parseScoreValue(quizData[key]);
+            
             matchedStudent.quizScores.push({
               quizName: key,
-              score: Number(quizData[key])
+              score: scoreValue
             });
           }
         });
@@ -200,7 +281,12 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   
   // Convert map to array
   for (const key in studentMap) {
-    students.push(studentMap[key] as Student);
+    const student = studentMap[key];
+    
+    // Only add valid students
+    if (isValidStudent(student)) {
+      students.push(student as Student);
+    }
   }
   
   return students;
@@ -209,4 +295,3 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
 export const parseCSVData = (filename: string, csvContent: string): ParsedFile => {
   return parseFileContent(filename, csvContent);
 };
-

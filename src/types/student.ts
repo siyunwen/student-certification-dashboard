@@ -34,3 +34,8 @@ export interface ParsedFile {
   data: any[];
 }
 
+export interface CourseData {
+  studentFile?: ParsedFile;
+  quizFile?: ParsedFile;
+  isComplete: boolean;
+}
