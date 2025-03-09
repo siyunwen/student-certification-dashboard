@@ -89,6 +89,9 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
   // Extract course name from filename
   const courseName = extractCourseNameFromFilename(filename);
   
+  console.log(`Parsing ${type} file: ${filename} with ${lines.length} lines`);
+  console.log(`Headers found: ${headers.join(', ')}`);
+  
   // Parse data based on file type
   const data = lines.slice(1).map(line => {
     const values = line.split(',');
@@ -102,6 +105,11 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
     
     return row;
   });
+  
+  console.log(`Parsed ${data.length} rows of data for ${courseName}`);
+  if (data.length > 0) {
+    console.log(`Sample data entry:`, data[0]);
+  }
   
   return { type, courseName, data };
 };
@@ -135,9 +143,11 @@ export const parseScoreValue = (value: string | number): number => {
   if (!value || value.trim() === '') return 0;
   
   // Handle "not finished" or similar non-numeric indicators
-  if (value.toString().toLowerCase().includes('not') || 
-      value.toString().toLowerCase().includes('n/a') ||
-      value.toString().toLowerCase().includes('incomplete')) {
+  const lowerValue = value.toString().toLowerCase();
+  if (lowerValue.includes('not') || 
+      lowerValue.includes('n/a') ||
+      lowerValue.includes('incomplete')) {
+    console.log(`Treating non-numeric value "${value}" as 0`);
     return 0;
   }
   
@@ -148,7 +158,13 @@ export const parseScoreValue = (value: string | number): number => {
   const numberValue = parseFloat(cleanValue);
   
   // Return 0 if NaN
-  return isNaN(numberValue) ? 0 : numberValue;
+  if (isNaN(numberValue)) {
+    console.log(`Failed to parse "${value}" as a number, using 0 instead`);
+    return 0;
+  }
+  
+  console.log(`Successfully parsed "${value}" as ${numberValue}`);
+  return numberValue;
 };
 
 export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseData> => {
@@ -194,7 +210,10 @@ export const isValidStudent = (student: any): boolean => {
 };
 
 const normalizeNameForComparison = (name: string): string => {
-  return name.toLowerCase().replace(/\s+/g, '');
+  // Remove all whitespace, punctuation, and convert to lowercase for comparison
+  return name.toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, '');    // Remove whitespace
 };
 
 export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles: ParsedFile[]): Student[] => {
@@ -204,6 +223,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   
   // Process student files
   studentFiles.forEach(studentFile => {
+    console.log(`Processing student file for course: ${studentFile.courseName} with ${studentFile.data.length} students`);
+    
     studentFile.data.forEach(studentData => {
       const name = studentData.name || '';
       const { firstName, lastName } = parseStudentName(name, false);
@@ -214,12 +235,14 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       
       // Skip invalid entries
       if (!firstName || !lastName || !email) {
+        console.log(`Skipping invalid student data: missing name or email (${name}, ${email})`);
         return;
       }
       
       // Skip cmu.edu and andrew.cmu.edu emails
       if (email.toLowerCase().endsWith('andrew.cmu.edu') || 
           email.toLowerCase().endsWith('cmu.edu')) {
+        console.log(`Skipping CMU student: ${name}, ${email}`);
         return;
       }
       
@@ -243,34 +266,56 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
           lastActivityDate,
           courseName: studentFile.courseName
         };
+        console.log(`Added student: ${fullName} (${email}) for course ${studentFile.courseName}`);
       }
     });
   });
   
   // Process quiz files
   quizFiles.forEach(quizFile => {
-    console.log(`Processing quiz file for course: ${quizFile.courseName}`);
+    console.log(`Processing quiz file for course: ${quizFile.courseName} with ${quizFile.data.length} entries`);
     
     // Log all the headers to understand the structure
     if (quizFile.data.length > 0) {
-      console.log(`Quiz file headers:`, Object.keys(quizFile.data[0]));
+      console.log(`Quiz file headers for ${quizFile.courseName}:`, Object.keys(quizFile.data[0]));
     }
     
     quizFile.data.forEach(quizData => {
       const name = quizData.student || '';
-      const { firstName, lastName } = parseStudentName(name, true);
-      const fullName = `${firstName} ${lastName}`;
-      const reversedFullName = `${lastName}, ${firstName}`;
+      console.log(`Processing quiz scores for student: ${name}`);
       
-      // Skip invalid entries
-      if (!firstName && !lastName) {
+      // Skip empty names
+      if (!name || name.trim() === '') {
+        console.log(`Skipping empty student name in quiz data`);
         return;
       }
+      
+      // Extract first and last names based on common formats
+      let firstName = '', lastName = '';
+      
+      // Try to detect name format
+      if (name.includes(',')) {
+        // Likely "Last, First" format
+        const { firstName: parsedFirst, lastName: parsedLast } = parseStudentName(name, true);
+        firstName = parsedFirst;
+        lastName = parsedLast;
+      } else {
+        // Likely "First Last" format
+        const { firstName: parsedFirst, lastName: parsedLast } = parseStudentName(name, false);
+        firstName = parsedFirst;
+        lastName = parsedLast;
+      }
+      
+      const fullName = `${firstName} ${lastName}`;
+      const reversedFullName = `${lastName}, ${firstName}`;
       
       // Normalize names for better matching
       const normalizedFullName = normalizeNameForComparison(fullName);
       const normalizedReversedName = normalizeNameForComparison(reversedFullName);
       const normalizedOriginalName = normalizeNameForComparison(name);
+      
+      console.log(`Looking for match for: "${name}" (normalized: ${normalizedOriginalName})`);
+      console.log(`Alternative formats: "${fullName}" (${normalizedFullName}) or "${reversedFullName}" (${normalizedReversedName})`);
       
       // Find corresponding student by matching name
       let matchedStudent = null;
@@ -286,18 +331,23 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
             normalizeNameForComparison(student.lastName + student.firstName) === normalizedOriginalName ||
             normalizeNameForComparison(student.fullName) === normalizedOriginalName) {
           matchedStudent = student;
+          console.log(`Found match: ${student.fullName} (${student.email})`);
           break;
         }
       }
       
       if (matchedStudent) {
-        console.log(`Found matching student for: ${name}`);
-        
-        // Debug: Log the raw quiz values
+        // Extract and process quiz scores
+        // All keys except 'student' are quiz names
         const quizKeys = Object.keys(quizData).filter(key => key !== 'student');
         console.log(`${name} has ${quizKeys.length} quiz scores to process`);
         
-        // Add quiz scores
+        if (quizKeys.length === 0) {
+          console.log(`WARNING: No quiz scores found for ${name}`);
+        }
+        
+        // Reset quiz scores to make sure we don't duplicate
+        matchedStudent.quizScores = [];
         let validScoreCount = 0;
         let totalScore = 0;
         
@@ -308,7 +358,6 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
           
           // Convert quiz score to number with improved parsing
           const scoreValue = parseScoreValue(originalValue);
-          console.log(`Parsed score: ${scoreValue}`);
           
           // Only count scores > 0 for average calculation
           if (scoreValue > 0) {
@@ -325,10 +374,10 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         // Calculate average score only if there are valid scores
         if (validScoreCount > 0) {
           matchedStudent.score = totalScore / validScoreCount;
-          console.log(`Calculated average score for ${matchedStudent.fullName}: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores)`);
-        } else if (matchedStudent.quizScores.length > 0) {
-          // If we have quiz scores but they're all 0, set score to 0
+          console.log(`Calculated average score for ${matchedStudent.fullName}: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores, total: ${totalScore})`);
+        } else {
           matchedStudent.score = 0;
+          console.log(`No valid scores for ${matchedStudent.fullName}, setting average to 0`);
         }
       } else {
         console.log(`No matching student found for: ${name}`);
@@ -343,6 +392,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     // Only add valid students
     if (isValidStudent(student)) {
       students.push(student as Student);
+    } else {
+      console.log(`Skipping invalid student: ${student.fullName}`);
     }
   }
   
@@ -351,6 +402,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     console.log(`Sample student scores:`, students.slice(0, 3).map(s => ({
       name: s.fullName,
       score: s.score,
+      quizCount: s.quizScores.length,
       quizScores: s.quizScores.map(q => ({ name: q.quizName, score: q.score }))
     })));
   }
@@ -361,8 +413,23 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
 export const parseCSVData = (filename: string, csvContent: string): ParsedFile => {
   console.log(`Parsing file: ${filename}`);
   const result = parseFileContent(filename, csvContent);
-  if (result.data.length > 0) {
-    console.log(`Sample data row:`, result.data[0]);
+  
+  if (result.type === 'quiz' && result.data.length > 0) {
+    console.log(`Quiz file detected. Sample row headers:`, Object.keys(result.data[0]));
+    
+    // Sample the first quiz entry to check if we're correctly parsing quiz scores
+    const firstEntry = result.data[0];
+    const quizKeys = Object.keys(firstEntry).filter(key => key !== 'student');
+    
+    console.log(`Found ${quizKeys.length} potential quiz columns`);
+    
+    // Log a sample of the quiz data to verify parsing
+    quizKeys.forEach(key => {
+      const originalValue = firstEntry[key];
+      const parsedValue = parseScoreValue(originalValue);
+      console.log(`Quiz "${key}": Original="${originalValue}", Parsed=${parsedValue}`);
+    });
   }
+  
   return result;
 };
