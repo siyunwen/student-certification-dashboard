@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -59,18 +58,20 @@ export const calculateCertificationStats = (
 };
 
 export const extractCourseNameFromFilename = (filename: string): string => {
-  // Extract the course name from filenames like "aifi_301_quiz_scores"
-  const parts = filename.split('_');
+  // Remove file extension if present
+  let name = filename.replace(/\.(csv|txt|xlsx|xls)$/i, '');
   
-  // Remove the last part if it's "quiz_scores" or "students"
-  if (parts.length > 2 && (parts[parts.length - 1] === 'scores' || parts[parts.length - 1] === 'students')) {
-    parts.pop();
-    if (parts[parts.length - 1] === 'quiz') {
-      parts.pop();
-    }
-  }
+  // Check for common file patterns
+  const studentPattern = /_students$/i;
+  const quizPattern = /_quiz_scores$/i;
   
-  return parts.join('_');
+  // Remove the suffix patterns
+  name = name.replace(studentPattern, '').replace(quizPattern, '');
+  
+  // Clean up any remaining underscores at the end
+  name = name.replace(/_+$/, '');
+  
+  return name;
 };
 
 export const parseFileContent = (filename: string, content: string): ParsedFile => {

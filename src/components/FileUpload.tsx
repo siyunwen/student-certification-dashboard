@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,6 +53,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
           try {
             const content = event.target?.result as string;
             const parsedFile = parseCSVData(file.name, content);
+            console.log(`File '${file.name}' parsed as course: '${parsedFile.courseName}'`);
             resolve(parsedFile);
           } catch (error) {
             reject(error);
@@ -125,7 +125,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     }
   };
 
-  // Get courses with both student and quiz files
   const getCourseCompleteness = () => {
     const courseStatus: Record<string, { hasStudent: boolean; hasQuiz: boolean }> = {};
     
