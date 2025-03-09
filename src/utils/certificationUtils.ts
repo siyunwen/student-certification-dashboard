@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -142,8 +143,10 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
-  // Remove any non-numeric characters except decimal point and percentage
-  const cleanValue = value.toString().replace(/[^\d.%]/g, '').replace(/%$/, '');
+  // Remove any non-numeric characters except decimal point
+  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  
+  // Parse the clean value as a number
   const numberValue = parseFloat(cleanValue);
   
   // Return 0 if NaN
@@ -243,6 +246,9 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   
   // Process quiz files
   quizFiles.forEach(quizFile => {
+    console.log(`Processing quiz file for course: ${quizFile.courseName}`);
+    console.log(`Quiz file headers:`, quizFile.data[0] ? Object.keys(quizFile.data[0]) : 'No data');
+    
     quizFile.data.forEach(quizData => {
       const name = quizData.student || '';
       const { firstName, lastName } = parseStudentName(name, true);
@@ -267,14 +273,27 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       }
       
       if (matchedStudent) {
+        console.log(`Found matching student for: ${name}`);
+        // Create a debug log of raw quiz values
+        const rawQuizValues = {};
+        Object.keys(quizData).forEach(key => {
+          if (key !== 'student') {
+            rawQuizValues[key] = quizData[key];
+          }
+        });
+        console.log(`Raw quiz values for ${name}:`, rawQuizValues);
+        
         // Add quiz scores
         let validScoreCount = 0;
         let totalScore = 0;
         
         Object.keys(quizData).forEach(key => {
           if (key !== 'student') {
+            // Get the original value before parsing
+            const originalValue = quizData[key];
             // Convert quiz score to number with improved parsing
-            const scoreValue = parseScoreValue(quizData[key]);
+            const scoreValue = parseScoreValue(originalValue);
+            console.log(`Quiz "${key}" - Original value: "${originalValue}" - Parsed value: ${scoreValue}`);
             
             // Only count scores > 0 for average calculation
             if (scoreValue > 0) {
@@ -299,6 +318,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         
         // Log for debugging
         console.log(`Student ${matchedStudent.fullName} has score: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores out of ${matchedStudent.quizScores.length} total quiz entries)`);
+      } else {
+        console.log(`No matching student found for: ${name}`);
       }
     });
   });
@@ -313,9 +334,23 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     }
   }
   
+  console.log(`Total students processed: ${students.length}`);
+  if (students.length > 0) {
+    console.log(`Sample student scores:`, students.slice(0, 3).map(s => ({
+      name: s.fullName,
+      score: s.score,
+      quizScores: s.quizScores
+    })));
+  }
+  
   return students;
 };
 
 export const parseCSVData = (filename: string, csvContent: string): ParsedFile => {
-  return parseFileContent(filename, csvContent);
+  console.log(`Parsing file: ${filename}`);
+  const result = parseFileContent(filename, csvContent);
+  if (result.data.length > 0) {
+    console.log(`Sample data row:`, result.data[0]);
+  }
+  return result;
 };
