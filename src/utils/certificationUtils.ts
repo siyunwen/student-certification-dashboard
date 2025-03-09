@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -136,6 +135,13 @@ export const parseScoreValue = (value: string | number): number => {
   // Handle empty values
   if (!value || value.trim() === '') return 0;
   
+  // Handle "not finished" or similar non-numeric indicators
+  if (value.toString().toLowerCase().includes('not') || 
+      value.toString().toLowerCase().includes('n/a') ||
+      value.toString().toLowerCase().includes('incomplete')) {
+    return 0;
+  }
+  
   // Remove any non-numeric characters except decimal point and percentage
   const cleanValue = value.toString().replace(/[^\d.%]/g, '').replace(/%$/, '');
   const numberValue = parseFloat(cleanValue);
@@ -262,10 +268,19 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       
       if (matchedStudent) {
         // Add quiz scores
+        let validScoreCount = 0;
+        let totalScore = 0;
+        
         Object.keys(quizData).forEach(key => {
           if (key !== 'student') {
             // Convert quiz score to number with improved parsing
             const scoreValue = parseScoreValue(quizData[key]);
+            
+            // Only count scores > 0 for average calculation
+            if (scoreValue > 0) {
+              validScoreCount++;
+              totalScore += scoreValue;
+            }
             
             matchedStudent.quizScores.push({
               quizName: key,
@@ -275,10 +290,15 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         });
         
         // Calculate average score
-        if (matchedStudent.quizScores.length > 0) {
-          const total = matchedStudent.quizScores.reduce((sum, quiz) => sum + quiz.score, 0);
-          matchedStudent.score = total / matchedStudent.quizScores.length;
+        if (validScoreCount > 0) {
+          matchedStudent.score = totalScore / validScoreCount;
+        } else if (matchedStudent.quizScores.length > 0) {
+          // If we have quiz scores but they're all 0, set score to 0
+          matchedStudent.score = 0;
         }
+        
+        // Log for debugging
+        console.log(`Student ${matchedStudent.fullName} has score: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores out of ${matchedStudent.quizScores.length} total quiz entries)`);
       }
     });
   });
