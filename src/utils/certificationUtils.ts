@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 
 export const isEligibleForCertification = (
@@ -129,7 +128,6 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
   }
 };
 
-// Convert string value to number, handling various formats
 export const parseScoreValue = (value: string | number): number => {
   if (typeof value === 'number') return value;
   
@@ -143,8 +141,8 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
-  // Remove any non-numeric characters except decimal point
-  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  // Remove percentage signs and keep only numbers and decimal points
+  const cleanValue = value.toString().replace(/%/g, '').trim();
   
   // Parse the clean value as a number
   const numberValue = parseFloat(cleanValue);
@@ -153,7 +151,6 @@ export const parseScoreValue = (value: string | number): number => {
   return isNaN(numberValue) ? 0 : numberValue;
 };
 
-// Group files by course name and check if both student and quiz files are present
 export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseData> => {
   const courseMap: Record<string, CourseData> = {};
   
@@ -181,7 +178,6 @@ export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 };
 
-// Filter out test accounts and invalid data
 export const isValidStudent = (student: any): boolean => {
   // Check if student has name and email
   if (!student.firstName || !student.lastName || !student.email) {
@@ -195,6 +191,10 @@ export const isValidStudent = (student: any): boolean => {
   }
   
   return true;
+};
+
+const normalizeNameForComparison = (name: string): string => {
+  return name.toLowerCase().replace(/\s+/g, '');
 };
 
 export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles: ParsedFile[]): Student[] => {
@@ -225,13 +225,16 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       
       // Create a key using email
       const key = email.toLowerCase();
+      const fullName = `${firstName} ${lastName}`;
+      const normalizedName = normalizeNameForComparison(fullName);
       
       if (!studentMap[key]) {
         studentMap[key] = {
           id: `student-${studentIdCounter++}`,
           firstName,
           lastName,
-          fullName: `${firstName} ${lastName}`,
+          fullName,
+          normalizedName,
           email,
           score: 0, // Will be calculated from quiz scores
           quizScores: [],
@@ -247,26 +250,41 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   // Process quiz files
   quizFiles.forEach(quizFile => {
     console.log(`Processing quiz file for course: ${quizFile.courseName}`);
-    console.log(`Quiz file headers:`, quizFile.data[0] ? Object.keys(quizFile.data[0]) : 'No data');
+    
+    // Log all the headers to understand the structure
+    if (quizFile.data.length > 0) {
+      console.log(`Quiz file headers:`, Object.keys(quizFile.data[0]));
+    }
     
     quizFile.data.forEach(quizData => {
       const name = quizData.student || '';
       const { firstName, lastName } = parseStudentName(name, true);
       const fullName = `${firstName} ${lastName}`;
+      const reversedFullName = `${lastName}, ${firstName}`;
       
       // Skip invalid entries
       if (!firstName && !lastName) {
         return;
       }
       
+      // Normalize names for better matching
+      const normalizedFullName = normalizeNameForComparison(fullName);
+      const normalizedReversedName = normalizeNameForComparison(reversedFullName);
+      const normalizedOriginalName = normalizeNameForComparison(name);
+      
       // Find corresponding student by matching name
       let matchedStudent = null;
       
-      // Try to find by full name
+      // Try to find student by different name formats
       for (const key in studentMap) {
         const student = studentMap[key];
-        if (student.fullName.toLowerCase() === fullName.toLowerCase() ||
-            (`${student.lastName}, ${student.firstName}`).toLowerCase() === name.toLowerCase()) {
+        const studentNormalizedName = student.normalizedName;
+        
+        // Try multiple formats to match
+        if (studentNormalizedName === normalizedFullName || 
+            studentNormalizedName === normalizedReversedName ||
+            normalizeNameForComparison(student.lastName + student.firstName) === normalizedOriginalName ||
+            normalizeNameForComparison(student.fullName) === normalizedOriginalName) {
           matchedStudent = student;
           break;
         }
@@ -274,50 +292,44 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       
       if (matchedStudent) {
         console.log(`Found matching student for: ${name}`);
-        // Create a debug log of raw quiz values
-        const rawQuizValues = {};
-        Object.keys(quizData).forEach(key => {
-          if (key !== 'student') {
-            rawQuizValues[key] = quizData[key];
-          }
-        });
-        console.log(`Raw quiz values for ${name}:`, rawQuizValues);
+        
+        // Debug: Log the raw quiz values
+        const quizKeys = Object.keys(quizData).filter(key => key !== 'student');
+        console.log(`${name} has ${quizKeys.length} quiz scores to process`);
         
         // Add quiz scores
         let validScoreCount = 0;
         let totalScore = 0;
         
-        Object.keys(quizData).forEach(key => {
-          if (key !== 'student') {
-            // Get the original value before parsing
-            const originalValue = quizData[key];
-            // Convert quiz score to number with improved parsing
-            const scoreValue = parseScoreValue(originalValue);
-            console.log(`Quiz "${key}" - Original value: "${originalValue}" - Parsed value: ${scoreValue}`);
-            
-            // Only count scores > 0 for average calculation
-            if (scoreValue > 0) {
-              validScoreCount++;
-              totalScore += scoreValue;
-            }
-            
-            matchedStudent.quizScores.push({
-              quizName: key,
-              score: scoreValue
-            });
+        quizKeys.forEach(key => {
+          // Get the original value before parsing
+          const originalValue = quizData[key];
+          console.log(`Quiz "${key}" - Original value: "${originalValue}"`);
+          
+          // Convert quiz score to number with improved parsing
+          const scoreValue = parseScoreValue(originalValue);
+          console.log(`Parsed score: ${scoreValue}`);
+          
+          // Only count scores > 0 for average calculation
+          if (scoreValue > 0) {
+            validScoreCount++;
+            totalScore += scoreValue;
           }
+          
+          matchedStudent.quizScores.push({
+            quizName: key,
+            score: scoreValue
+          });
         });
         
-        // Calculate average score
+        // Calculate average score only if there are valid scores
         if (validScoreCount > 0) {
           matchedStudent.score = totalScore / validScoreCount;
+          console.log(`Calculated average score for ${matchedStudent.fullName}: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores)`);
         } else if (matchedStudent.quizScores.length > 0) {
           // If we have quiz scores but they're all 0, set score to 0
           matchedStudent.score = 0;
         }
-        
-        // Log for debugging
-        console.log(`Student ${matchedStudent.fullName} has score: ${matchedStudent.score.toFixed(1)}% (from ${validScoreCount} valid scores out of ${matchedStudent.quizScores.length} total quiz entries)`);
       } else {
         console.log(`No matching student found for: ${name}`);
       }
@@ -339,7 +351,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     console.log(`Sample student scores:`, students.slice(0, 3).map(s => ({
       name: s.fullName,
       score: s.score,
-      quizScores: s.quizScores
+      quizScores: s.quizScores.map(q => ({ name: q.quizName, score: q.score }))
     })));
   }
   
