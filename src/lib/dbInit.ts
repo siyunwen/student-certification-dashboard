@@ -1,64 +1,64 @@
 
 import { supabase } from './supabase';
 
-// The SQL schema from supabase/schema.sql
-const schema = `
--- Create courses table
-CREATE TABLE IF NOT EXISTS courses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-);
-
--- Create students table
-CREATE TABLE IF NOT EXISTS students (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  enrollment_date DATE NOT NULL,
-  last_activity_date DATE NOT NULL,
-  course_id UUID REFERENCES courses(id) NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-);
-
--- Create quizzes table
-CREATE TABLE IF NOT EXISTS quizzes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES students(id) NOT NULL,
-  quiz_name TEXT NOT NULL,
-  score NUMERIC NOT NULL,
-  completed_at DATE NOT NULL,
-  course_id UUID REFERENCES courses(id) NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-);
-
--- Create certification settings table
-CREATE TABLE IF NOT EXISTS certification_settings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  pass_threshold NUMERIC NOT NULL,
-  date_since DATE,
-  user_id UUID NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-);
-`;
-
 // Function to initialize database tables
 export const initDatabase = async (): Promise<void> => {
   try {
-    // Execute the schema SQL
-    const { error } = await supabase.rpc('exec_sql', { sql: schema });
-    
-    if (error) {
-      console.error('Error initializing database:', error);
-      
-      // If RPC fails, we might not have the exec_sql function
-      // Let's try to create some sample data anyway
-      await createSampleData();
-      
-      throw error;
-    }
+    // Create courses table
+    await supabase.from('courses').select('id').limit(1).catch(() => {
+      return supabase.query(`
+        CREATE TABLE IF NOT EXISTS courses (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          name TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+        );
+      `);
+    });
+
+    // Create students table
+    await supabase.from('students').select('id').limit(1).catch(() => {
+      return supabase.query(`
+        CREATE TABLE IF NOT EXISTS students (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          enrollment_date DATE NOT NULL,
+          last_activity_date DATE NOT NULL,
+          course_id UUID REFERENCES courses(id) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+        );
+      `);
+    });
+
+    // Create quizzes table
+    await supabase.from('quizzes').select('id').limit(1).catch(() => {
+      return supabase.query(`
+        CREATE TABLE IF NOT EXISTS quizzes (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          student_id UUID REFERENCES students(id) NOT NULL,
+          quiz_name TEXT NOT NULL,
+          score NUMERIC NOT NULL,
+          completed_at DATE NOT NULL,
+          course_id UUID REFERENCES courses(id) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+        );
+      `);
+    });
+
+    // Create certification settings table
+    await supabase.from('certification_settings').select('id').limit(1).catch(() => {
+      return supabase.query(`
+        CREATE TABLE IF NOT EXISTS certification_settings (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          pass_threshold NUMERIC NOT NULL,
+          date_since DATE,
+          user_id UUID NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+        );
+      `);
+    });
     
     console.log('Database tables created successfully');
     
@@ -75,10 +75,15 @@ export const initDatabase = async (): Promise<void> => {
 const createSampleData = async (): Promise<void> => {
   try {
     // Check if we already have data
-    const { data: existingCourses } = await supabase
+    const { data: existingCourses, error: checkError } = await supabase
       .from('courses')
       .select('id')
       .limit(1);
+    
+    if (checkError) {
+      console.error('Error checking existing courses:', checkError);
+      return;
+    }
     
     if (existingCourses && existingCourses.length > 0) {
       console.log('Sample data already exists');

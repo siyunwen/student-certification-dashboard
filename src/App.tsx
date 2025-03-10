@@ -12,7 +12,13 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1, // Only retry once to avoid excessive error messages
+    },
+  },
+});
 
 const App = () => {
   const [initializing, setInitializing] = useState(true);
@@ -26,8 +32,11 @@ const App = () => {
         setInitializing(false);
       } catch (error) {
         console.error('Database initialization failed:', error);
-        setInitError('Failed to initialize database. Please check console for details.');
+        setInitError('Failed to initialize database. Please try refreshing the page or check if Supabase has the right permissions.');
         setInitializing(false);
+        
+        // Refresh the query client to retry fetching data
+        queryClient.invalidateQueries();
       }
     };
 
