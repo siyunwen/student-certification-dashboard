@@ -1,8 +1,23 @@
+
 import { supabase } from './supabase';
 
 // Function to initialize database tables
 export const initDatabase = async (): Promise<void> => {
+  console.log('Starting database initialization...');
+  
   try {
+    // First check if the exec_sql function works
+    const { data: testResult, error: testError } = await supabase.rpc('exec_sql', {
+      sql_query: 'SELECT 1 as test'
+    });
+    
+    if (testError) {
+      console.error('The exec_sql function does not exist or is not working:', testError);
+      throw new Error('SQL function setup required');
+    }
+    
+    console.log('SQL function is working, proceeding with database setup');
+    
     // Create courses table if it doesn't exist
     const { data: coursesData, error: coursesError } = await supabase
       .from('courses')
