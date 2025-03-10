@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -56,9 +55,6 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
     
     if (!courseMap[courseName]) {
       courseMap[courseName] = {
-        name: courseName,
-        hasStudentFile: false,
-        hasQuizFile: false,
         isComplete: false,
         studentFile: undefined,
         quizFile: undefined
@@ -66,17 +62,15 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
     }
     
     if (file.type === 'student') {
-      courseMap[courseName].hasStudentFile = true;
       courseMap[courseName].studentFile = file;
     } else if (file.type === 'quiz') {
-      courseMap[courseName].hasQuizFile = true;
       courseMap[courseName].quizFile = file;
     }
     
     // Update complete status
     courseMap[courseName].isComplete = 
-      courseMap[courseName].hasStudentFile && 
-      courseMap[courseName].hasQuizFile;
+      courseMap[courseName].studentFile !== undefined && 
+      courseMap[courseName].quizFile !== undefined;
   });
   
   return courseMap;
