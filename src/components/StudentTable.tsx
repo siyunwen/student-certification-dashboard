@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
@@ -45,13 +44,10 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   const [expandedStudents, setExpandedStudents] = useState<string[]>([]);
   const [formattedStudents, setFormattedStudents] = useState<Student[]>([]);
   
-  // Get unique course names
   const courseNames = Array.from(new Set(formattedStudents.map(s => s.courseName))).filter(Boolean);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
 
-  // Format students' scores on component mount and when students prop changes
   useEffect(() => {
-    // Debug what we received
     console.log("Raw students data:", students.map(s => ({
       name: s.fullName,
       email: s.email,
@@ -60,7 +56,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       quizzes: s.quizScores?.length || 0
     })));
     
-    // Normalize students data to ensure scores are in percentage format (0-100)
     const normalized = students.map(student => {
       return {
         ...student,
@@ -83,7 +78,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     setFormattedStudents(normalized);
   }, [students]);
   
-  // Filter students by search term and course
   const filteredStudents = formattedStudents.filter((student) => {
     const matchesSearch = 
       student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,7 +89,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     return matchesSearch && matchesCourse;
   });
   
-  // Sort students
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     let comparison = 0;
     
@@ -112,7 +105,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     return sortOrder === 'asc' ? comparison : -comparison;
   });
   
-  // Paginate students
   const totalPages = Math.ceil(sortedStudents.length / rowsPerPage);
   const start = (page - 1) * rowsPerPage;
   const paginatedStudents = sortedStudents.slice(start, start + rowsPerPage);
@@ -154,14 +146,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3" />;
     return <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" />;
   };
-  
-  // Debug scores
-  console.log("DEBUG - StudentTable: Students with scores:", formattedStudents.map(s => ({
-    name: s.fullName,
-    email: s.email,
-    score: s.score,
-    quizCount: s.quizScores.length
-  })));
   
   return (
     <div className={className}>
@@ -251,110 +235,111 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedStudents.map((student) => {
-                const isPassing = student.score >= passThreshold && student.courseCompleted;
-                const isExpanded = expandedStudents.includes(student.id);
-                
-                // Debug: Print student score for this specific row
-                console.log(`Student ${student.fullName}: score=${student.score.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
-                
-                return (
-                  <React.Fragment key={student.id}>
-                    <TableRow className={`group animate-fade-in ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/30' : ''}`}>
-                      <TableCell>
-                        <Checkbox 
-                          checked={selectedStudents.includes(student.id)}
-                          onCheckedChange={() => toggleSelectStudent(student.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="p-0 w-10">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => toggleExpandStudent(student.id)}
-                        >
-                          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{student.firstName} {student.lastName}</div>
-                        <div className="text-sm text-slate-500 truncate max-w-[150px] sm:max-w-xs">
-                          {student.email}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        <span 
-                          className={`
-                            ${isPassing 
-                              ? 'text-green-600 dark:text-green-400' 
-                              : 'text-slate-600 dark:text-slate-400'
-                            }
-                          `}
-                        >
-                          {student.score.toFixed(1)}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <div className="flex items-center">
-                          {isPassing ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-green-500 mr-1.5" />
-                              <span className="text-green-700 dark:text-green-400 text-sm font-medium">Eligible</span>
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
-                              <span className="text-slate-500 text-sm">Not eligible</span>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge variant="outline" className="font-normal">
-                          {student.courseName || 'Unknown'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
-                        {format(new Date(student.lastActivityDate), 'MMM d, yyyy')}
-                      </TableCell>
-                    </TableRow>
-                    
-                    {isExpanded && (
-                      <TableRow className="bg-slate-50 dark:bg-slate-800/30">
-                        <TableCell colSpan={7} className="p-0">
-                          <div className="p-4">
-                            <h4 className="text-sm font-medium mb-2">Quiz Scores</h4>
-                            {student.quizScores.length > 0 ? (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                {student.quizScores.map((quiz, index) => (
-                                  <div 
-                                    key={index} 
-                                    className="bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"
-                                  >
-                                    <span className="text-sm truncate mr-2" title={quiz.quizName}>
-                                      {quiz.quizName}
-                                    </span>
-                                    <span 
-                                      className={`text-sm font-medium ${
-                                        quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
-                                      }`}
-                                    >
-                                      {quiz.score.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+              <>
+                {paginatedStudents.map((student) => {
+                  const isPassing = student.score >= passThreshold && student.courseCompleted;
+                  const isExpanded = expandedStudents.includes(student.id);
+                  
+                  console.log(`Student ${student.fullName}: score=${student.score.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
+                  
+                  return (
+                    <React.Fragment key={student.id}>
+                      <TableRow className={`group animate-fade-in ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/30' : ''}`}>
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedStudents.includes(student.id)}
+                            onCheckedChange={() => toggleSelectStudent(student.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="p-0 w-10">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => toggleExpandStudent(student.id)}
+                          >
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{student.firstName} {student.lastName}</div>
+                          <div className="text-sm text-slate-500 truncate max-w-[150px] sm:max-w-xs">
+                            {student.email}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          <span 
+                            className={`
+                              ${isPassing 
+                                ? 'text-green-600 dark:text-green-400' 
+                                : 'text-slate-600 dark:text-slate-400'
+                              }
+                            `}
+                          >
+                            {student.score.toFixed(1)}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <div className="flex items-center">
+                            {isPassing ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-green-500 mr-1.5" />
+                                <span className="text-green-700 dark:text-green-400 text-sm font-medium">Eligible</span>
+                              </>
                             ) : (
-                              <p className="text-sm text-slate-500 italic">No quiz scores available</p>
+                              <>
+                                <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
+                                <span className="text-slate-500 text-sm">Not eligible</span>
+                              </>
                             )}
                           </div>
                         </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant="outline" className="font-normal">
+                            {student.courseName || 'Unknown'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
+                          {format(new Date(student.lastActivityDate), 'MMM d, yyyy')}
+                        </TableCell>
                       </TableRow>
-                    )}
-                  </React.Fragment>
-                );
-              })
+                      
+                      {isExpanded && (
+                        <TableRow className="bg-slate-50 dark:bg-slate-800/30">
+                          <TableCell colSpan={7} className="p-0">
+                            <div className="p-4">
+                              <h4 className="text-sm font-medium mb-2">Quiz Scores</h4>
+                              {student.quizScores.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                  {student.quizScores.map((quiz, index) => (
+                                    <div 
+                                      key={index} 
+                                      className="bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"
+                                    >
+                                      <span className="text-sm truncate mr-2" title={quiz.quizName}>
+                                        {quiz.quizName}
+                                      </span>
+                                      <span 
+                                        className={`text-sm font-medium ${
+                                          quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                                        }`}
+                                      >
+                                        {quiz.score.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-500 italic">No quiz scores available</p>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </>
             )}
           </TableBody>
         </Table>

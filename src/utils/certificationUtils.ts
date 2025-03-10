@@ -1,5 +1,5 @@
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
-import { normalizeScore } from './scoreUtils';
+import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
 export const isEligibleForCertification = (
   student: Student,
@@ -94,10 +94,10 @@ export const calculateCertificationStats = (
 };
 
 export const extractCourseNameFromFilename = (filename: string): string => {
-  // Remove file extension if present
+  // Remove file extension
   let name = filename.replace(/\.(csv|txt|xlsx|xls)$/i, '');
   
-  // Check for common file patterns
+  // Check for common suffixes that indicate file type
   const studentPattern = /_students$/i;
   const quizPattern = /_quiz_scores$/i;
   
@@ -107,6 +107,7 @@ export const extractCourseNameFromFilename = (filename: string): string => {
   // Clean up any remaining underscores at the end
   name = name.replace(/_+$/, '');
   
+  console.log(`Extracted course name "${name}" from filename "${filename}"`);
   return name;
 };
 
@@ -129,7 +130,9 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
   }
   
   // Determine file type based on the headers or filename
-  const isQuizFile = filename.toLowerCase().includes('quiz') || headers.includes('student');
+  const isQuizFile = filename.toLowerCase().includes('quiz') || 
+                    headers.includes('student') || 
+                    headers.some(h => h.toLowerCase().includes('quiz'));
   const type = isQuizFile ? 'quiz' : 'student';
   
   // Extract course name from filename
@@ -208,100 +211,6 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
   }
 };
 
-export const isNotCompletedQuiz = (value: string | number): boolean => {
-  if (typeof value === 'string') {
-    const lowerValue = value.toLowerCase();
-    return (
-      lowerValue.includes('not') || 
-      lowerValue.includes('n/a') || 
-      lowerValue.includes('incomplete') ||
-      lowerValue === '' ||
-      lowerValue === '-'
-    );
-  }
-  return false;
-};
-
-export const parseScoreValue = (value: string | number): number => {
-  console.log(`Parsing score value: "${value}" (${typeof value})`);
-  
-  // Handle already numeric values
-  if (typeof value === 'number') {
-    // Keep all scores as percentages (0-100)
-    if (value > 0 && value <= 1) {
-      const percentageValue = value * 100;
-      console.log(`Converting decimal ${value} to percentage: ${percentageValue}`);
-      return percentageValue;
-    }
-    return value;
-  }
-  
-  // Handle empty values
-  if (!value || value.trim() === '') {
-    console.log('Empty value, returning 0');
-    return 0;
-  }
-  
-  // Handle "not finished" or similar non-numeric indicators
-  const lowerValue = value.toString().toLowerCase();
-  if (lowerValue.includes('not') || 
-      lowerValue.includes('n/a') ||
-      lowerValue.includes('incomplete') ||
-      lowerValue === '-') {
-    console.log(`Non-numeric value "${value}", returning 0`);
-    return 0;
-  }
-  
-  // Remove percentage signs and keep only numbers and decimal points
-  const cleanValue = value.toString().replace(/%/g, '').trim();
-  
-  // Parse the clean value as a number
-  const numberValue = parseFloat(cleanValue);
-  
-  // Return 0 if NaN
-  if (isNaN(numberValue)) {
-    console.log(`Failed to parse "${value}" as a number, using 0 instead`);
-    return 0;
-  }
-  
-  // Always store scores as percentages (0-100)
-  if (numberValue > 0 && numberValue <= 1) {
-    const percentageValue = numberValue * 100;
-    console.log(`Converting decimal ${numberValue} to percentage: ${percentageValue}`);
-    return percentageValue;
-  }
-  
-  console.log(`Final parsed score: ${numberValue}`);
-  return numberValue;
-};
-
-export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseData> => {
-  const courseMap: Record<string, CourseData> = {};
-  
-  files.forEach(file => {
-    if (!file.courseName) return;
-    
-    if (!courseMap[file.courseName]) {
-      courseMap[file.courseName] = {
-        isComplete: false
-      };
-    }
-    
-    if (file.type === 'student') {
-      courseMap[file.courseName].studentFile = file;
-    } else if (file.type === 'quiz') {
-      courseMap[file.courseName].quizFile = file;
-    }
-    
-    // Check if course has both files
-    courseMap[file.courseName].isComplete = 
-      !!courseMap[file.courseName].studentFile && 
-      !!courseMap[file.courseName].quizFile;
-  });
-  
-  return courseMap;
-};
-
 export const isValidStudent = (student: any): boolean => {
   // Check if student has name and email
   if (!student.firstName || !student.email) {
@@ -309,9 +218,9 @@ export const isValidStudent = (student: any): boolean => {
     return false;
   }
   
-  // Filter out andrew.cmu.edu and cmu.edu emails - IMPORTANT! This filter must work correctly
+  // Filter out andrew.cmu.edu and cmu.edu emails - This filter MUST work correctly
   const email = student.email.toLowerCase();
-  if (email.endsWith('@andrew.cmu.edu') || email.endsWith('@cmu.edu')) {
+  if (email.includes('@andrew.cmu.edu') || email.includes('@cmu.edu')) {
     console.log(`Filtering out CMU student email: ${email}`);
     return false;
   }
@@ -354,18 +263,19 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       const name = studentData[nameField] || '';
       console.log(`Student raw name from ${nameField} field: "${name}"`);
       
-      // Detect name format - if it contains a comma, it's likely "Last, First" format
-      const hasComma = name.includes(',');
-      const { firstName, lastName } = parseStudentName(name, hasComma);
+      // Extract email - critical for filtering out CMU emails
       const email = studentData.email || '';
       
-      console.log(`Parsed name: firstName="${firstName}", lastName="${lastName}", email="${email}"`);
-      
       // Early check for CMU emails - immediately skip these students
-      if (email.toLowerCase().endsWith('@andrew.cmu.edu') || email.toLowerCase().endsWith('@cmu.edu')) {
+      if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
         console.log(`Skipping CMU student: ${name}, ${email}`);
         return;
       }
+      
+      // Detect name format - in student files, it's usually "First Last" format
+      const { firstName, lastName } = parseStudentName(name, false);
+      
+      console.log(`Parsed name: firstName="${firstName}", lastName="${lastName}", email="${email}"`);
       
       // Skip invalid entries
       if (!firstName || !email) {
@@ -406,6 +316,12 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   const emailMap: Record<string, any> = {};
   for (const key in studentMap) {
     const student = studentMap[key];
+    // Double check we're not adding CMU emails
+    if (student.email.toLowerCase().includes('@andrew.cmu.edu') || 
+        student.email.toLowerCase().includes('@cmu.edu')) {
+      console.log(`Skipping CMU email in emailMap: ${student.email}`);
+      continue;
+    }
     emailMap[student.email.toLowerCase()] = student;
   }
   
@@ -430,7 +346,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         const email = quizData.email.toLowerCase();
         
         // Skip CMU emails in quiz data too
-        if (email.endsWith('@andrew.cmu.edu') || email.endsWith('@cmu.edu')) {
+        if (email.includes('@andrew.cmu.edu') || email.includes('@cmu.edu')) {
           console.log(`Skipping CMU student in quiz data: ${email}`);
           return;
         }
@@ -460,21 +376,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         return;
       }
       
-      // Extract first and last names based on common formats
-      let firstName = '', lastName = '';
-      
-      // Try to detect name format
-      if (name.includes(',')) {
-        // Likely "Last, First" format
-        const { firstName: parsedFirst, lastName: parsedLast } = parseStudentName(name, true);
-        firstName = parsedFirst;
-        lastName = parsedLast;
-      } else {
-        // Likely "First Last" format
-        const { firstName: parsedFirst, lastName: parsedLast } = parseStudentName(name, false);
-        firstName = parsedFirst;
-        lastName = parsedLast;
-      }
+      // In quiz files, names are usually in "Last, First" format
+      const { firstName, lastName } = parseStudentName(name, true);
       
       const fullName = `${firstName} ${lastName}`.trim();
       const reversedFullName = lastName ? `${lastName}, ${firstName}` : firstName;
@@ -608,10 +511,6 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     Valid Quiz Scores: ${validScoreCount}
     All Quizzes Completed: ${allQuizzesCompleted}
     `);
-    
-    // DEBUG: Print the final quiz scores and average
-    console.log(`DEBUG: Final quiz scores for ${student.fullName}:`, student.quizScores);
-    console.log(`DEBUG: Final average score: ${student.score}`);
   }
   
   // Convert map to array and ensure all students are valid
@@ -619,8 +518,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     const student = studentMap[key];
     
     // Double-check we're not including CMU emails
-    if (student.email.toLowerCase().endsWith('@andrew.cmu.edu') || 
-        student.email.toLowerCase().endsWith('@cmu.edu')) {
+    if (student.email.toLowerCase().includes('@andrew.cmu.edu') || 
+        student.email.toLowerCase().includes('@cmu.edu')) {
       console.log(`Filtering out CMU student before final list: ${student.fullName} (${student.email})`);
       continue;
     }
