@@ -1,11 +1,17 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
+import { normalizeScore } from './scoreUtils';
 
 export const isEligibleForCertification = (
   student: Student,
   settings: CertificationSettings
 ): boolean => {
+  // Ensure both score and threshold are in percentage format (0-100)
+  const studentScore = normalizeScore(student.score, true);
+  const passThreshold = normalizeScore(settings.passThreshold, true);
+  
   // Check if student passed the threshold
-  const passedThreshold = student.score >= settings.passThreshold;
+  const passedThreshold = studentScore >= passThreshold;
   
   // Check if student completed the course
   const completedCourse = student.courseCompleted;
@@ -26,7 +32,7 @@ export const isEligibleForCertification = (
   }
   
   console.log(`Student ${student.fullName} eligibility check:
-    - Score ${student.score.toFixed(1)}% >= ${settings.passThreshold}%: ${passedThreshold}
+    - Score ${studentScore.toFixed(1)}% >= ${passThreshold}%: ${passedThreshold}
     - Course completed: ${completedCourse}
     - Active since ${settings.dateSince || 'any date'}: ${meetsDateRequirement}
     - Last activity: ${student.lastActivityDate}

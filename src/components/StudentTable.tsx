@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Student } from '@/types/student';
 import { Badge } from '@/components/ui/badge';
+import { normalizeScore } from '@/utils/scoreUtils';
 
 interface StudentTableProps {
   students: Student[];
@@ -42,13 +43,46 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [expandedStudents, setExpandedStudents] = useState<string[]>([]);
+  const [formattedStudents, setFormattedStudents] = useState<Student[]>([]);
   
   // Get unique course names
-  const courseNames = Array.from(new Set(students.map(s => s.courseName))).filter(Boolean);
+  const courseNames = Array.from(new Set(formattedStudents.map(s => s.courseName))).filter(Boolean);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
 
+  // Format students' scores on component mount and when students prop changes
+  useEffect(() => {
+    // Debug what we received
+    console.log("Raw students data:", students.map(s => ({
+      name: s.fullName,
+      rawScore: s.score,
+      courseCompleted: s.courseCompleted,
+      quizzes: s.quizScores?.length || 0
+    })));
+    
+    // Normalize students data to ensure scores are in percentage format (0-100)
+    const normalized = students.map(student => {
+      return {
+        ...student,
+        score: normalizeScore(student.score, true),
+        quizScores: student.quizScores.map(quiz => ({
+          ...quiz,
+          score: normalizeScore(quiz.score, true)
+        }))
+      };
+    });
+    
+    console.log("Normalized students data:", normalized.map(s => ({
+      name: s.fullName,
+      normalizedScore: s.score,
+      courseCompleted: s.courseCompleted,
+      quizzes: s.quizScores?.length || 0
+    })));
+    
+    setFormattedStudents(normalized);
+  }, [students]);
+  
   // Filter students by search term and course
-  const filteredStudents = students.filter((student) => {
+  const filteredStudents = formattedStudents.filter((student) => {
     const matchesSearch = 
       student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -116,13 +150,11 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3" />;
-    return sortOrder === 'asc' 
-      ? <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" /> 
-      : <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" />;
+    return <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" />;
   };
   
   // Debug scores
-  console.log("DEBUG - StudentTable: Students with scores:", students.map(s => ({
+  console.log("DEBUG - StudentTable: Students with scores:", formattedStudents.map(s => ({
     name: s.fullName,
     score: s.score,
     quizCount: s.quizScores.length
@@ -221,7 +253,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                 const isExpanded = expandedStudents.includes(student.id);
                 
                 // Debug: Print student score for this specific row
-                console.log(`Student ${student.fullName}: score=${student.score}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
+                console.log(`Student ${student.fullName}: score=${student.score.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
                 
                 return (
                   <React.Fragment key={student.id}>

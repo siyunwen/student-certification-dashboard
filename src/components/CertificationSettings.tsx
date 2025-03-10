@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { CertificationSettings as SettingsType } from '@/types/student';
+import { normalizeScore } from '@/utils/scoreUtils';
 
 interface CertificationSettingsProps {
   settings: SettingsType;
@@ -21,6 +22,18 @@ const CertificationSettings = ({
   onSettingsChange,
   className
 }: CertificationSettingsProps) => {
+  // Ensure passThreshold is in percentage format for display
+  useEffect(() => {
+    // If the threshold is in decimal format (0-1), convert to percentage
+    if (settings.passThreshold > 0 && settings.passThreshold <= 1) {
+      console.log("Converting pass threshold from decimal to percentage for display");
+      onSettingsChange({
+        ...settings,
+        passThreshold: normalizeScore(settings.passThreshold, true)
+      });
+    }
+  }, []);
+
   const handleThresholdChange = (value: number[]) => {
     onSettingsChange({
       ...settings,
