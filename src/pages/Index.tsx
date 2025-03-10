@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -8,8 +9,7 @@ import AnimatedNumber from '@/components/AnimatedNumber';
 import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile, CourseData } from '@/types/student';
 import { 
   calculateCertificationStats,
-  getEligibleStudents,
-  groupFilesByCourse
+  getEligibleStudents
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Eye } from 'lucide-react';
@@ -31,17 +31,31 @@ const Index = () => {
   
   const queryClient = useQueryClient();
   
-  // Group files by course
-  const courseMap = groupFilesByCourse(parsedFiles);
-  const completeCoursesCount = Object.values(courseMap).filter(course => course.isComplete).length;
-  
   // Get unique course names with complete data
-  const courseNames = Object.keys(courseMap).filter(name => courseMap[name].isComplete);
+  const courseGroups = parsedFiles.reduce((groups: Record<string, {hasStudent: boolean, hasQuiz: boolean}>, file) => {
+    if (!file.courseName) return groups;
+    
+    if (!groups[file.courseName]) {
+      groups[file.courseName] = { hasStudent: false, hasQuiz: false };
+    }
+    
+    if (file.type === 'student') {
+      groups[file.courseName].hasStudent = true;
+    } else if (file.type === 'quiz') {
+      groups[file.courseName].hasQuiz = true;
+    }
+    
+    return groups;
+  }, {});
+  
+  const completeCoursesCount = Object.values(courseGroups).filter(course => course.hasStudent && course.hasQuiz).length;
+  const courseNames = Object.keys(courseGroups).filter(name => courseGroups[name].hasStudent && courseGroups[name].hasQuiz);
 
   // Fetch students from Supabase
   const { data: students = [], isLoading: isLoadingStudents, error: studentError } = useQuery({
     queryKey: ['students'],
-    queryFn: fetchStudents
+    queryFn: fetchStudents,
+    enabled: true // Always fetch but don't display until user clicks show results
   });
   
   // Fetch certification settings from Supabase
@@ -74,12 +88,8 @@ const Index = () => {
   
   const handleFilesLoaded = (files: ParsedFile[]) => {
     setParsedFiles(files);
-    // If files are loaded and we have students, show the results automatically
-    if (files.length > 0 && students.length > 0) {
-      setShowResults(true);
-    }
-    
-    // Refresh student data if files were processed by Supabase
+    // Do NOT automatically show results
+    // Just refresh student data if files were processed
     if (files.length > 0) {
       queryClient.invalidateQueries({ queryKey: ['students'] });
     }

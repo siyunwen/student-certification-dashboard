@@ -48,7 +48,15 @@ function transformStudentData(
     courseMap.set(course.id, course.name);
   });
 
-  return studentRecords.map(student => {
+  // Filter out CMU emails at the transformation stage
+  const filteredStudentRecords = studentRecords.filter(student => {
+    const email = student.email.toLowerCase();
+    return !email.includes('@andrew.cmu.edu') && !email.includes('@cmu.edu');
+  });
+
+  console.log(`Filtered out ${studentRecords.length - filteredStudentRecords.length} CMU email addresses`);
+
+  return filteredStudentRecords.map(student => {
     // Find all quizzes for this student
     const studentQuizzes = quizRecords.filter(quiz => quiz.student_id === student.id);
     
@@ -181,14 +189,17 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
     parsedFiles.forEach(file => {
       if (!file.courseName) return;
       
-      if (!courseMap[file.courseName]) {
-        courseMap[file.courseName] = {};
+      // Extract course name consistently
+      const courseName = file.courseName.trim();
+      
+      if (!courseMap[courseName]) {
+        courseMap[courseName] = {};
       }
       
       if (file.type === 'student') {
-        courseMap[file.courseName].studentFile = file;
+        courseMap[courseName].studentFile = file;
       } else if (file.type === 'quiz') {
-        courseMap[file.courseName].quizFile = file;
+        courseMap[courseName].quizFile = file;
       }
     });
     
@@ -247,6 +258,18 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         const enrollmentDate = studentData.enrollmentDate || new Date().toISOString().split('T')[0];
         const lastActivityDate = studentData.lastActivityDate || new Date().toISOString().split('T')[0];
         
+        // Skip CMU emails
+        if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
+          console.log(`Skipping CMU student: ${firstName} ${lastName}, ${email}`);
+          continue;
+        }
+        
+        // Skip students without proper name or email
+        if ((firstName === 'Unknown' && lastName === 'Unknown') || !email || email.startsWith('unknown-')) {
+          console.log(`Skipping student with incomplete data: ${firstName} ${lastName}, ${email}`);
+          continue;
+        }
+        
         // Check if student already exists
         const { data: existingStudents } = await supabase
           .from('students')
@@ -295,7 +318,26 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         }
         
         const quizName = quizData.quizName || 'Unknown Quiz';
-        const score = quizData.score || 0;
+        // Convert score to number - handling text scores
+        let score: number;
+        if (typeof quizData.score === 'string') {
+          // Try to parse percentage or decimal value
+          const scoreStr = quizData.score.trim();
+          if (scoreStr.endsWith('%')) {
+            score = parseFloat(scoreStr.replace('%', ''));
+          } else {
+            score = parseFloat(scoreStr) * 100; // Assume decimal if no % sign
+          }
+          
+          // Handle parsing errors
+          if (isNaN(score)) {
+            score = 0;
+            console.warn(`Could not parse score "${quizData.score}" for quiz ${quizName}, defaulting to 0`);
+          }
+        } else {
+          score = quizData.score || 0;
+        }
+        
         const completedAt = quizData.completedAt || new Date().toISOString().split('T')[0];
         
         // Check if this quiz already exists
