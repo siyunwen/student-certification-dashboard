@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
