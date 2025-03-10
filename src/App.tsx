@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 
+// Create query client with configuration
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -39,8 +40,9 @@ const App = () => {
           return;
         }
         
-        // Then initialize the database tables without sample data
-        await initDatabase(false); // Pass false to avoid creating sample data
+        // Initialize database tables but ensure sample data is never created
+        await initDatabase(false);
+        console.log('Database initialized without sample data');
         toast.success('Database initialized successfully');
         setInitializing(false);
       } catch (error) {

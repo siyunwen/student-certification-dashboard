@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -98,7 +97,7 @@ export function extractCourseName(filename: string): string {
 // Parse name from a string (handles multiple formats)
 export function parseName(name: string): { firstName: string; lastName: string } {
   if (!name || typeof name !== 'string' || name.trim() === '') {
-    return { firstName: '', lastName: '' };
+    return { firstName: 'Unknown', lastName: 'Unknown' };
   }
   
   name = name.trim();
@@ -107,53 +106,27 @@ export function parseName(name: string): { firstName: string; lastName: string }
   if (name.includes(',')) {
     const parts = name.split(',').map(part => part.trim());
     return {
-      firstName: parts.length > 1 ? parts[1] : '',
-      lastName: parts[0] || ''
+      firstName: parts.length > 1 ? parts[1] : 'Unknown',
+      lastName: parts[0] || 'Unknown'
     };
   } 
   // Format: "First Last"
   else if (name.includes(' ')) {
     const parts = name.split(' ');
-    const firstName = parts[0] || '';
-    const lastName = parts.slice(1).join(' '); // All remaining parts form the last name
+    const firstName = parts[0] || 'Unknown';
+    const lastName = parts.slice(1).join(' ') || 'Unknown'; // All remaining parts form the last name
     return { firstName, lastName };
   } 
   // Just a single name
   else {
-    return { firstName: name, lastName: '' };
-  }
-}
-
-// Parse CSV data into a standardized format
-export function parseCSVData(filename: string, content: string): ParsedFile {
-  const lines = content.split('\n').filter(line => line.trim() !== '');
-  if (lines.length < 2) {
-    throw new Error(`File ${filename} has insufficient data`);
-  }
-  
-  // Extract course name from filename 
-  const courseName = extractCourseName(filename);
-  
-  // Determine file type based on filename
-  const fileType = filename.toLowerCase().includes('quiz') || 
-                  filename.toLowerCase().includes('score') ? 
-                  'quiz' : 'student';
-
-  console.log(`Parsing ${fileType} file for course: ${courseName}`);
-  
-  // Parse header row
-  const headers = parseCSVRow(lines[0]);
-  
-  // Process the file based on type
-  if (fileType === 'student') {
-    return parseStudentFile(courseName, headers, lines);
-  } else {
-    return parseQuizFile(courseName, headers, lines);
+    return { firstName: name, lastName: 'Unknown' };
   }
 }
 
 // Parse a student data file
 function parseStudentFile(courseName: string, headers: string[], lines: string[]): ParsedFile {
+  console.log('Parsing student file with headers:', headers);
+  
   const nameIndex = headers.findIndex(h => 
     h.toLowerCase() === 'name' || 
     h.toLowerCase().includes('student') || 
@@ -172,7 +145,7 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
     h.toLowerCase().includes('interaction')
   );
   
-  if (nameIndex === -1 || emailIndex === -1) {
+  if (nameIndex === -1 && emailIndex === -1) {
     throw new Error(`Student file is missing required columns (name or email)`);
   }
   
@@ -181,20 +154,34 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
   // Process each line (skipping header)
   for (let i = 1; i < lines.length; i++) {
     const rowData = parseCSVRow(lines[i]);
-    if (rowData.length <= Math.max(nameIndex, emailIndex)) continue;
-    
-    const fullName = rowData[nameIndex] || '';
-    const { firstName, lastName } = parseName(fullName);
-    
-    // Skip CMU emails immediately
-    const email = rowData[emailIndex] || '';
-    if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
-      console.log(`Skipping CMU student: ${fullName}, ${email}`);
+    if (rowData.length <= Math.max(nameIndex, emailIndex)) {
+      console.log(`Skipping row ${i} due to insufficient data:`, rowData);
       continue;
     }
     
-    // Skip if both name and email are missing
-    if ((!firstName && !lastName) || !email) {
+    let fullName = '';
+    if (nameIndex !== -1 && rowData.length > nameIndex) {
+      fullName = rowData[nameIndex] || '';
+    }
+    
+    // Parse name into first and last name
+    const { firstName, lastName } = parseName(fullName);
+    console.log(`Parsed name: "${fullName}" -> firstName: "${firstName}", lastName: "${lastName}"`);
+    
+    // Extract email
+    let email = '';
+    if (emailIndex !== -1 && rowData.length > emailIndex) {
+      email = rowData[emailIndex] || '';
+      
+      // Skip CMU emails immediately
+      if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
+        console.log(`Skipping CMU student: ${fullName}, ${email}`);
+        continue;
+      }
+    }
+    
+    // Skip if both name parts and email are missing or 'Unknown'
+    if ((firstName === 'Unknown' && lastName === 'Unknown') && !email) {
       console.log(`Skipping record with missing data: name=${fullName}, email=${email}`);
       continue;
     }

@@ -203,6 +203,8 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
       }
     });
     
+    console.log('Courses mapped:', Object.keys(courseMap));
+    
     // Process only courses that have both student and quiz files
     const completeCourses = Object.entries(courseMap).filter(
       ([_, files]) => files.studentFile && files.quizFile
@@ -213,10 +215,14 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
       return { parsedFiles, students: [] };
     }
     
+    console.log(`Found ${completeCourses.length} complete courses to process`);
+    
     const allStudents: Student[] = [];
     
     // Process each complete course
     for (const [courseName, files] of completeCourses) {
+      console.log(`Processing course: ${courseName}`);
+      
       // First, check if the course already exists
       const { data: existingCourses } = await supabase
         .from('courses')
@@ -227,6 +233,7 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
       
       if (existingCourses && existingCourses.length > 0) {
         courseId = existingCourses[0].id;
+        console.log(`Using existing course ID: ${courseId}`);
       } else {
         // Create new course
         const { data: newCourse, error: courseError } = await supabase
@@ -241,11 +248,15 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         }
         
         courseId = newCourse.id;
+        console.log(`Created new course with ID: ${courseId}`);
       }
       
       // Now process the student data
       const studentFile = files.studentFile!;
       const quizFile = files.quizFile!;
+      
+      console.log(`Student file has ${studentFile.data.length} records`);
+      console.log(`Quiz file has ${quizFile.data.length} records`);
       
       // Map of email to student ID for linking quizzes
       const emailToStudentId: Record<string, string> = {};
@@ -257,6 +268,8 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         const email = studentData.email || `unknown-${uuidv4()}@example.com`;
         const enrollmentDate = studentData.enrollmentDate || new Date().toISOString().split('T')[0];
         const lastActivityDate = studentData.lastActivityDate || new Date().toISOString().split('T')[0];
+        
+        console.log(`Processing student: ${firstName} ${lastName}, ${email}`);
         
         // Skip CMU emails
         if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
@@ -281,6 +294,7 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         
         if (existingStudents && existingStudents.length > 0) {
           studentId = existingStudents[0].id;
+          console.log(`Using existing student ID: ${studentId}`);
         } else {
           // Create new student
           const { data: newStudent, error: studentError } = await supabase
@@ -302,6 +316,7 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
           }
           
           studentId = newStudent.id;
+          console.log(`Created new student with ID: ${studentId}`);
         }
         
         emailToStudentId[email] = studentId;
@@ -340,6 +355,8 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
         
         const completedAt = quizData.completedAt || new Date().toISOString().split('T')[0];
         
+        console.log(`Processing quiz: ${quizName} for student ${studentId} with score ${score}`);
+        
         // Check if this quiz already exists
         const { data: existingQuizzes } = await supabase
           .from('quizzes')
@@ -356,9 +373,11 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
               completed_at: completedAt
             })
             .eq('id', existingQuizzes[0].id);
+          
+          console.log(`Updated existing quiz ID: ${existingQuizzes[0].id}`);
         } else {
           // Create new quiz
-          await supabase
+          const { data: newQuiz, error: quizError } = await supabase
             .from('quizzes')
             .insert({
               student_id: studentId,
@@ -366,10 +385,21 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
               score: score,
               completed_at: completedAt,
               course_id: courseId
-            });
+            })
+            .select('id')
+            .single();
+          
+          if (quizError) {
+            console.error('Error creating quiz:', quizError);
+          } else if (newQuiz) {
+            console.log(`Created new quiz with ID: ${newQuiz.id}`);
+          }
         }
       }
     }
+    
+    // Remove any sample data that might exist from previous initializations
+    await cleanupSampleData();
     
     // Fetch the updated student data
     const updatedStudents = await fetchStudents();
@@ -381,5 +411,102 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
   } catch (error) {
     console.error('Error processing and storing files:', error);
     throw error;
+  }
+}
+
+// Function to cleanup any sample data that might have been created during initialization
+async function cleanupSampleData() {
+  try {
+    console.log('Checking for sample data to clean up...');
+    
+    // Get sample emails
+    const sampleEmails = [
+      'john.doe@example.com',
+      'jane.smith@example.com',
+      'alice.johnson@example.com',
+      'bob.brown@example.com',
+      'emma.wilson@example.com'
+    ];
+    
+    // Find students with these emails
+    const { data: sampleStudents } = await supabase
+      .from('students')
+      .select('id')
+      .in('email', sampleEmails);
+    
+    if (sampleStudents && sampleStudents.length > 0) {
+      const studentIds = sampleStudents.map(s => s.id);
+      console.log(`Found ${studentIds.length} sample students to remove`);
+      
+      // Delete quizzes for these students
+      const { error: quizDeleteError } = await supabase
+        .from('quizzes')
+        .delete()
+        .in('student_id', studentIds);
+      
+      if (quizDeleteError) {
+        console.error('Error deleting sample quizzes:', quizDeleteError);
+      } else {
+        console.log('Sample quizzes deleted successfully');
+      }
+      
+      // Delete the students
+      const { error: studentDeleteError } = await supabase
+        .from('students')
+        .delete()
+        .in('id', studentIds);
+      
+      if (studentDeleteError) {
+        console.error('Error deleting sample students:', studentDeleteError);
+      } else {
+        console.log('Sample students deleted successfully');
+      }
+    } else {
+      console.log('No sample students found');
+    }
+    
+    // Check for sample courses (only if they have no real students)
+    const sampleCourseNames = [
+      'AI Fundamentals 101',
+      'Data Science Basics',
+      'Web Development'
+    ];
+    
+    for (const courseName of sampleCourseNames) {
+      // Get course
+      const { data: course } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('name', courseName)
+        .single();
+      
+      if (course) {
+        // Check if course has any non-sample students
+        const { data: nonSampleStudents, error: countError } = await supabase
+          .from('students')
+          .select('id')
+          .eq('course_id', course.id)
+          .not('email', 'in', sampleEmails);
+        
+        if (!countError && (!nonSampleStudents || nonSampleStudents.length === 0)) {
+          // No real students, safe to delete this course
+          const { error: courseDeleteError } = await supabase
+            .from('courses')
+            .delete()
+            .eq('id', course.id);
+          
+          if (courseDeleteError) {
+            console.error(`Error deleting sample course ${courseName}:`, courseDeleteError);
+          } else {
+            console.log(`Sample course ${courseName} deleted successfully`);
+          }
+        } else {
+          console.log(`Course ${courseName} has real students, preserving it`);
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error cleaning up sample data:', error);
   }
 }
