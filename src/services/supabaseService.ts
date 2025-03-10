@@ -171,36 +171,173 @@ export async function fetchCertificationSettings(): Promise<CertificationSetting
 }
 
 // Upload and process file data
-export async function uploadAndProcessFiles(files: File[]): Promise<{ parsedFiles: ParsedFile[], students: Student[] }> {
-  const formData = new FormData();
-  files.forEach((file, index) => {
-    formData.append(`file-${index}`, file);
-  });
-
-  // First, upload files to Supabase storage
-  const uploadPromises = files.map(async (file) => {
-    const fileName = `${uuidv4()}-${file.name}`;
-    const { error } = await supabase.storage
-      .from('course-files')
-      .upload(fileName, file);
-
-    if (error) {
-      console.error('Error uploading file:', error);
-      throw error;
-    }
-
-    return fileName;
-  });
-
-  const uploadedFileNames = await Promise.all(uploadPromises);
+export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<{ parsedFiles: ParsedFile[], students: Student[] }> {
+  console.log('Processing and storing parsed files in Supabase:', parsedFiles);
   
-  // Here we would typically call a Supabase Edge Function to process the files
-  // Since we don't have that set up yet, we'll return empty data
-  // In a real implementation, you would create and call an Edge Function
-
-  // Mock the response for now
-  return {
-    parsedFiles: [],
-    students: []
-  };
+  try {
+    // Group files by course
+    const courseMap: Record<string, { studentFile?: ParsedFile, quizFile?: ParsedFile }> = {};
+    
+    parsedFiles.forEach(file => {
+      if (!file.courseName) return;
+      
+      if (!courseMap[file.courseName]) {
+        courseMap[file.courseName] = {};
+      }
+      
+      if (file.type === 'student') {
+        courseMap[file.courseName].studentFile = file;
+      } else if (file.type === 'quiz') {
+        courseMap[file.courseName].quizFile = file;
+      }
+    });
+    
+    // Process only courses that have both student and quiz files
+    const completeCourses = Object.entries(courseMap).filter(
+      ([_, files]) => files.studentFile && files.quizFile
+    );
+    
+    if (completeCourses.length === 0) {
+      console.warn('No complete courses found (need both student and quiz files)');
+      return { parsedFiles, students: [] };
+    }
+    
+    const allStudents: Student[] = [];
+    
+    // Process each complete course
+    for (const [courseName, files] of completeCourses) {
+      // First, check if the course already exists
+      const { data: existingCourses } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('name', courseName);
+      
+      let courseId: string;
+      
+      if (existingCourses && existingCourses.length > 0) {
+        courseId = existingCourses[0].id;
+      } else {
+        // Create new course
+        const { data: newCourse, error: courseError } = await supabase
+          .from('courses')
+          .insert({ name: courseName })
+          .select('id')
+          .single();
+        
+        if (courseError || !newCourse) {
+          console.error('Error creating course:', courseError);
+          continue;
+        }
+        
+        courseId = newCourse.id;
+      }
+      
+      // Now process the student data
+      const studentFile = files.studentFile!;
+      const quizFile = files.quizFile!;
+      
+      // Map of email to student ID for linking quizzes
+      const emailToStudentId: Record<string, string> = {};
+      
+      // Insert all students
+      for (const studentData of studentFile.data) {
+        const firstName = studentData.firstName || 'Unknown';
+        const lastName = studentData.lastName || 'Unknown';
+        const email = studentData.email || `unknown-${uuidv4()}@example.com`;
+        const enrollmentDate = studentData.enrollmentDate || new Date().toISOString().split('T')[0];
+        const lastActivityDate = studentData.lastActivityDate || new Date().toISOString().split('T')[0];
+        
+        // Check if student already exists
+        const { data: existingStudents } = await supabase
+          .from('students')
+          .select('id')
+          .eq('email', email)
+          .eq('course_id', courseId);
+        
+        let studentId: string;
+        
+        if (existingStudents && existingStudents.length > 0) {
+          studentId = existingStudents[0].id;
+        } else {
+          // Create new student
+          const { data: newStudent, error: studentError } = await supabase
+            .from('students')
+            .insert({
+              first_name: firstName,
+              last_name: lastName,
+              email: email,
+              enrollment_date: enrollmentDate,
+              last_activity_date: lastActivityDate,
+              course_id: courseId
+            })
+            .select('id')
+            .single();
+          
+          if (studentError || !newStudent) {
+            console.error('Error creating student:', studentError);
+            continue;
+          }
+          
+          studentId = newStudent.id;
+        }
+        
+        emailToStudentId[email] = studentId;
+      }
+      
+      // Insert all quizzes
+      for (const quizData of quizFile.data) {
+        const email = quizData.email || '';
+        const studentId = emailToStudentId[email];
+        
+        if (!studentId) {
+          console.warn(`No student ID found for email: ${email}`);
+          continue;
+        }
+        
+        const quizName = quizData.quizName || 'Unknown Quiz';
+        const score = quizData.score || 0;
+        const completedAt = quizData.completedAt || new Date().toISOString().split('T')[0];
+        
+        // Check if this quiz already exists
+        const { data: existingQuizzes } = await supabase
+          .from('quizzes')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('quiz_name', quizName);
+        
+        if (existingQuizzes && existingQuizzes.length > 0) {
+          // Update existing quiz
+          await supabase
+            .from('quizzes')
+            .update({
+              score: score,
+              completed_at: completedAt
+            })
+            .eq('id', existingQuizzes[0].id);
+        } else {
+          // Create new quiz
+          await supabase
+            .from('quizzes')
+            .insert({
+              student_id: studentId,
+              quiz_name: quizName,
+              score: score,
+              completed_at: completedAt,
+              course_id: courseId
+            });
+        }
+      }
+    }
+    
+    // Fetch the updated student data
+    const updatedStudents = await fetchStudents();
+    
+    return {
+      parsedFiles,
+      students: updatedStudents
+    };
+  } catch (error) {
+    console.error('Error processing and storing files:', error);
+    throw error;
+  }
 }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -18,24 +17,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { fetchStudents, saveCertificationSettings, fetchCertificationSettings } from '@/services/supabaseService';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const COLORS = ['#2563eb', '#e5e7eb'];
 
 const Index = () => {
-  const [students, setStudents] = useState<Student[]>([]);
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
   const [settings, setSettings] = useState<SettingsType>({
     passThreshold: 70,
     dateSince: null
   });
-  const [stats, setStats] = useState<CertificationStats>({
-    totalStudents: 0,
-    eligibleStudents: 0,
-    averageScore: 0,
-    passRate: 0
-  });
   const [showResults, setShowResults] = useState(false);
+  
+  const queryClient = useQueryClient();
   
   // Group files by course
   const courseMap = groupFilesByCourse(parsedFiles);
@@ -45,7 +39,7 @@ const Index = () => {
   const courseNames = Object.keys(courseMap).filter(name => courseMap[name].isComplete);
 
   // Fetch students from Supabase
-  const { data: studentsData, isLoading: isLoadingStudents, error: studentError } = useQuery({
+  const { data: students = [], isLoading: isLoadingStudents, error: studentError } = useQuery({
     queryKey: ['students'],
     queryFn: fetchStudents
   });
@@ -68,18 +62,8 @@ const Index = () => {
     }
   });
   
-  // Recalculate stats when students or settings change
-  useEffect(() => {
-    setStats(calculateCertificationStats(students, settings));
-  }, [students, settings]);
-  
-  // Set students from Supabase data when available
-  useEffect(() => {
-    if (studentsData) {
-      setStudents(studentsData);
-      setShowResults(true);
-    }
-  }, [studentsData]);
+  // Calculate stats based on students and settings
+  const stats = calculateCertificationStats(students, settings);
   
   // Set settings from Supabase data when available
   useEffect(() => {
@@ -90,9 +74,15 @@ const Index = () => {
   
   const handleFilesLoaded = (files: ParsedFile[]) => {
     setParsedFiles(files);
-    // In a real implementation, we would upload and process these files
-    // through a Supabase Edge Function
-    toast.info('Files will be processed through Supabase in a future update');
+    // If files are loaded and we have students, show the results automatically
+    if (files.length > 0 && students.length > 0) {
+      setShowResults(true);
+    }
+    
+    // Refresh student data if files were processed by Supabase
+    if (files.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    }
   };
   
   const handleSettingsChange = (newSettings: SettingsType) => {

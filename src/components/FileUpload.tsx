@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ParsedFile } from '@/types/student';
 import { parseCSVData } from '@/utils/certificationUtils';
+import { uploadAndProcessFiles } from '@/services/supabaseService';
 
 interface FileUploadProps {
   onFilesLoaded: (files: ParsedFile[]) => void;
@@ -17,6 +19,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -143,6 +146,31 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     });
     
     return courseStatus;
+  };
+
+  const uploadToSupabase = async () => {
+    const courseStatus = getCourseCompleteness();
+    const completeCoursesCount = Object.values(courseStatus).filter(
+      status => status.hasStudent && status.hasQuiz
+    ).length;
+    
+    if (completeCoursesCount === 0) {
+      toast.warning('Please upload both student and quiz files for at least one course');
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      const result = await uploadAndProcessFiles(parsedFiles);
+      toast.success('Data successfully saved to Supabase!');
+      onFilesLoaded(result.parsedFiles);
+    } catch (error) {
+      console.error('Error uploading to Supabase:', error);
+      toast.error('Failed to save data to Supabase');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const courseStatus = getCourseCompleteness();
@@ -277,6 +305,25 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
               <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">
                 Upload both student and quiz files for at least one course to process data
               </p>
+            )}
+            
+            {completeCoursesCount > 0 && (
+              <div className="mt-4">
+                <Button 
+                  onClick={uploadToSupabase}
+                  className="w-full"
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
+                      Saving to Supabase...
+                    </>
+                  ) : (
+                    <>Save Data to Supabase</>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </div>
