@@ -583,3 +583,30 @@ export const parseCSVData = (filename: string, csvContent: string): ParsedFile =
   
   return result;
 };
+
+export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseData> => {
+  const courseMap: Record<string, CourseData> = {};
+  
+  files.forEach(file => {
+    if (!courseMap[file.courseName]) {
+      courseMap[file.courseName] = {
+        studentFile: file.type === 'student' ? file : undefined,
+        quizFile: file.type === 'quiz' ? file : undefined,
+        isComplete: false
+      };
+    } else {
+      if (file.type === 'student') {
+        courseMap[file.courseName].studentFile = file;
+      } else if (file.type === 'quiz') {
+        courseMap[file.courseName].quizFile = file;
+      }
+    }
+    
+    // Course is complete when it has both student and quiz files
+    courseMap[file.courseName].isComplete = 
+      !!courseMap[file.courseName].studentFile && 
+      !!courseMap[file.courseName].quizFile;
+  });
+  
+  return courseMap;
+};
