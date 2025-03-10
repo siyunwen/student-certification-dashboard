@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 
 // Function to initialize database tables
-export const initDatabase = async (): Promise<void> => {
+export const initDatabase = async (createSampleData = false): Promise<void> => {
   console.log('Starting database initialization...');
   
   try {
@@ -127,8 +127,12 @@ export const initDatabase = async (): Promise<void> => {
     
     console.log('Database tables created successfully');
     
-    // Create sample data for testing
-    await createSampleData();
+    // Only create sample data if explicitly requested
+    if (createSampleData) {
+      await createSampleDataFn();
+    } else {
+      console.log('Skipping sample data creation');
+    }
     
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -136,8 +140,8 @@ export const initDatabase = async (): Promise<void> => {
   }
 };
 
-// Function to create sample data for testing
-const createSampleData = async (): Promise<void> => {
+// Function to create sample data for testing, separated for clarity
+const createSampleDataFn = async (): Promise<void> => {
   try {
     // Check if we already have data
     const { data: existingCourses, error: checkError } = await supabase

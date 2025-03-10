@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -12,7 +11,7 @@ import {
   getEligibleStudents
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Eye } from 'lucide-react';
+import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Eye, FileUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -31,7 +30,6 @@ const Index = () => {
   
   const queryClient = useQueryClient();
   
-  // Get unique course names with complete data
   const courseGroups = parsedFiles.reduce((groups: Record<string, {hasStudent: boolean, hasQuiz: boolean}>, file) => {
     if (!file.courseName) return groups;
     
@@ -51,20 +49,17 @@ const Index = () => {
   const completeCoursesCount = Object.values(courseGroups).filter(course => course.hasStudent && course.hasQuiz).length;
   const courseNames = Object.keys(courseGroups).filter(name => courseGroups[name].hasStudent && courseGroups[name].hasQuiz);
 
-  // Fetch students from Supabase
   const { data: students = [], isLoading: isLoadingStudents, error: studentError } = useQuery({
     queryKey: ['students'],
     queryFn: fetchStudents,
-    enabled: true // Always fetch but don't display until user clicks show results
+    enabled: true
   });
-  
-  // Fetch certification settings from Supabase
+
   const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
     queryKey: ['certificationSettings'],
     queryFn: fetchCertificationSettings
   });
 
-  // Update certification settings in Supabase
   const { mutate: updateSettings } = useMutation({
     mutationFn: saveCertificationSettings,
     onSuccess: () => {
@@ -75,36 +70,30 @@ const Index = () => {
       console.error('Error saving settings:', error);
     }
   });
-  
-  // Calculate stats based on students and settings
+
   const stats = calculateCertificationStats(students, settings);
-  
-  // Set settings from Supabase data when available
+
   useEffect(() => {
     if (settingsData) {
       setSettings(settingsData);
     }
   }, [settingsData]);
-  
+
   const handleFilesLoaded = (files: ParsedFile[]) => {
     setParsedFiles(files);
-    // Do NOT automatically show results
-    // Just refresh student data if files were processed
     if (files.length > 0) {
       queryClient.invalidateQueries({ queryKey: ['students'] });
     }
   };
-  
+
   const handleSettingsChange = (newSettings: SettingsType) => {
     setSettings(newSettings);
-    // Save settings to Supabase
     updateSettings(newSettings);
   };
-  
+
   const generateReport = () => {
     const eligibleStudents = getEligibleStudents(students, settings);
     
-    // Create CSV content
     const headers = ['First Name', 'Last Name', 'Email', 'Average Score', 'Last Activity Date', 'Course'];
     const rows = eligibleStudents.map(student => [
       student.firstName,
@@ -120,7 +109,6 @@ const Index = () => {
       ...rows.map(row => row.join(','))
     ].join('\n');
     
-    // Create download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -132,22 +120,25 @@ const Index = () => {
     
     toast.success('Report downloaded successfully');
   };
-  
+
   const handleShowResults = () => {
     if (completeCoursesCount === 0 && students.length === 0) {
       toast.info('Please upload files or fetch data from the database');
       return;
     }
     
+    if (students.length === 0) {
+      toast.info('No student data found. Please upload files first.');
+      return;
+    }
+    
     setShowResults(true);
     
-    // Scroll to results section
     setTimeout(() => {
       document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
-  
-  // Generate chart data
+
   const chartData = [
     { name: 'Eligible', value: stats.eligibleStudents },
     { name: 'Not Eligible', value: stats.totalStudents - stats.eligibleStudents }
@@ -160,7 +151,6 @@ const Index = () => {
   
   return (
     <div className="min-h-screen bg-white">
-      {/* Header Section */}
       <div className="bg-gradient-to-b from-brand-50 to-white dark:from-slate-900 dark:to-slate-900/60 border-b border-slate-100 dark:border-slate-800">
         <div className="page-container">
           <DashboardHeader
@@ -182,7 +172,6 @@ const Index = () => {
       </div>
       
       <main className="page-container">
-        {/* Loading indicator */}
         {(isLoadingStudents || isLoadingSettings) && (
           <div className="my-8 flex justify-center">
             <div className="flex items-center space-x-2">
@@ -192,7 +181,6 @@ const Index = () => {
           </div>
         )}
 
-        {/* Setup Section */}
         <section className="grid gap-6 grid-cols-1 lg:grid-cols-2 mt-8">
           <DashboardCard 
             title="1. Upload Course Files" 
@@ -233,7 +221,6 @@ const Index = () => {
           </DashboardCard>
         </section>
         
-        {/* Show Results Button */}
         <section className="mt-8 flex justify-center">
           <Button 
             onClick={handleShowResults} 
@@ -245,10 +232,27 @@ const Index = () => {
           </Button>
         </section>
         
-        {/* Results Sections - Only visible when Show Results is clicked */}
         {showResults && (
           <div id="results-section">
-            {/* Stats Section - Visible only when students are loaded */}
+            {students.length === 0 && (
+              <section className="section mt-8 animate-fade-in">
+                <DashboardCard>
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400 mb-4">
+                      <FileUp className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-medium text-slate-900 dark:text-white mb-2">No Student Data Found</h3>
+                    <p className="text-center text-slate-500 dark:text-slate-400 max-w-md mb-6">
+                      Please upload your student and quiz files using the file uploader above to see certification results.
+                    </p>
+                    <Button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                      Go to File Upload
+                    </Button>
+                  </div>
+                </DashboardCard>
+              </section>
+            )}
+            
             {students.length > 0 && (
               <section className="section mt-8 animate-fade-in">
                 <h2 className="section-title">Certification Overview</h2>
@@ -302,7 +306,6 @@ const Index = () => {
               </section>
             )}
             
-            {/* Chart and Table Section - Visible only when students are loaded */}
             {students.length > 0 && (
               <>
                 <section className="section mt-8 animate-fade-in">

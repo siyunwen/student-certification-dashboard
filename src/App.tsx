@@ -39,8 +39,8 @@ const App = () => {
           return;
         }
         
-        // Then initialize the database tables
-        await initDatabase();
+        // Then initialize the database tables without sample data
+        await initDatabase(false); // Pass false to avoid creating sample data
         toast.success('Database initialized successfully');
         setInitializing(false);
       } catch (error) {
