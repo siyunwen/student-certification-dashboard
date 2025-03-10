@@ -54,17 +54,21 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       email: s.email,
       rawScore: s.score,
       courseCompleted: s.courseCompleted,
-      quizzes: s.quizScores?.length || 0
+      quizzes: s.quizScores?.length || 0,
+      id: s.id,
+      courseName: s.courseName,
+      firstName: s.firstName,
+      lastName: s.lastName
     })));
     
     const normalized = students.map(student => {
       return {
         ...student,
         score: normalizeScore(student.score, true),
-        quizScores: student.quizScores.map(quiz => ({
+        quizScores: student.quizScores?.map(quiz => ({
           ...quiz,
           score: normalizeScore(quiz.score, true)
-        }))
+        })) || []
       };
     });
     
@@ -73,7 +77,9 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       email: s.email,
       normalizedScore: s.score,
       courseCompleted: s.courseCompleted,
-      quizzes: s.quizScores?.length || 0
+      quizzes: s.quizScores?.length || 0,
+      id: s.id,
+      courseName: s.courseName
     })));
     
     setFormattedStudents(normalized);
@@ -81,9 +87,9 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   
   const filteredStudents = formattedStudents.filter((student) => {
     const matchesSearch = 
-      student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.email.toLowerCase().includes(searchTerm.toLowerCase());
+      (student.firstName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (student.lastName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (student.email?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     
     const matchesCourse = selectedCourse ? student.courseName === selectedCourse : true;
     
@@ -94,13 +100,13 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     let comparison = 0;
     
     if (sortField === 'fullName') {
-      comparison = a.fullName.localeCompare(b.fullName);
+      comparison = (a.fullName || '').localeCompare(b.fullName || '');
     } else if (sortField === 'score') {
-      comparison = a.score - b.score;
+      comparison = (a.score || 0) - (b.score || 0);
     } else if (sortField === 'lastActivityDate') {
-      comparison = new Date(a.lastActivityDate).getTime() - new Date(b.lastActivityDate).getTime();
+      comparison = new Date(a.lastActivityDate || 0).getTime() - new Date(b.lastActivityDate || 0).getTime();
     } else if (sortField === 'courseName') {
-      comparison = a.courseName.localeCompare(b.courseName);
+      comparison = (a.courseName || '').localeCompare(b.courseName || '');
     }
     
     return sortOrder === 'asc' ? comparison : -comparison;
@@ -150,6 +156,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   
   return (
     <div className={className}>
+      {/* Search and filter section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <Input
@@ -182,6 +189,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
         </div>
       </div>
       
+      {/* Table section */}
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
@@ -241,7 +249,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                   const isPassing = student.score >= passThreshold && student.courseCompleted;
                   const isExpanded = expandedStudents.includes(student.id);
                   
-                  console.log(`Student ${student.fullName}: score=${student.score.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores.length}`);
+                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores?.length}`);
                   
                   return (
                     <React.Fragment key={student.id}>
@@ -277,7 +285,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                               }
                             `}
                           >
-                            {student.score.toFixed(1)}%
+                            {student.score?.toFixed(1)}%
                           </span>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">
@@ -301,7 +309,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
-                          {format(new Date(student.lastActivityDate), 'MMM d, yyyy')}
+                          {student.lastActivityDate ? format(new Date(student.lastActivityDate), 'MMM d, yyyy') : 'N/A'}
                         </TableCell>
                       </TableRow>
                       
@@ -310,7 +318,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                           <TableCell colSpan={7} className="p-0">
                             <div className="p-4">
                               <h4 className="text-sm font-medium mb-2">Quiz Scores</h4>
-                              {student.quizScores.length > 0 ? (
+                              {student.quizScores && student.quizScores.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                                   {student.quizScores.map((quiz, index) => (
                                     <div 
@@ -325,7 +333,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                                           quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
                                         }`}
                                       >
-                                        {quiz.score.toFixed(1)}%
+                                        {quiz.score?.toFixed(1)}%
                                       </span>
                                     </div>
                                   ))}
@@ -346,6 +354,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
         </Table>
       </div>
       
+      {/* Pagination section */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-slate-500">
