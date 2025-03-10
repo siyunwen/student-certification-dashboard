@@ -24,12 +24,21 @@ const queryClient = new QueryClient({
 const App = () => {
   const [initializing, setInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const [setupRequired, setSetupRequired] = useState(false);
 
   useEffect(() => {
     const initializeDatabase = async () => {
       try {
         // First create the SQL execution function if needed
-        await setupSqlFunction();
+        try {
+          await setupSqlFunction();
+        } catch (functionError) {
+          console.error('Function setup error:', functionError);
+          setSetupRequired(true);
+          setInitializing(false);
+          return;
+        }
+        
         // Then initialize the database tables
         await initDatabase();
         toast.success('Database initialized successfully');
@@ -60,7 +69,43 @@ const App = () => {
             </div>
           </div>
         )}
-        {initError && (
+        {setupRequired && (
+          <div className="max-w-4xl mx-auto mt-8 px-4">
+            <Alert variant="warning" className="mb-8">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Supabase Setup Required</AlertTitle>
+              <AlertDescription>
+                <p>This application requires a custom SQL function to be created in your Supabase project.</p>
+                <p className="mt-2">Please go to the SQL Editor in your Supabase dashboard and run the following SQL:</p>
+                <pre className="bg-slate-100 p-4 mt-2 rounded text-xs overflow-auto">
+                  {`CREATE OR REPLACE FUNCTION exec_sql(sql_query TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  result JSONB;
+BEGIN
+  EXECUTE sql_query;
+  result := '{"success": true}'::JSONB;
+  RETURN result;
+EXCEPTION WHEN OTHERS THEN
+  result := json_build_object('error', SQLERRM, 'success', false)::JSONB;
+  RETURN result;
+END;
+$$;`}
+                </pre>
+                <button 
+                  className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" 
+                  onClick={() => window.location.reload()}
+                >
+                  Reload Application
+                </button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        {initError && !setupRequired && (
           <div className="max-w-4xl mx-auto mt-8 px-4">
             <Alert variant="destructive" className="mb-8">
               <AlertCircle className="h-4 w-4" />

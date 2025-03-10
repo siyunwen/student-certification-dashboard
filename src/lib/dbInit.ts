@@ -1,55 +1,64 @@
-
 import { supabase } from './supabase';
 
 // Function to initialize database tables
 export const initDatabase = async (): Promise<void> => {
   try {
     // Create courses table if it doesn't exist
-    const { error: coursesError } = await supabase
+    const { data: coursesData, error: coursesError } = await supabase
       .from('courses')
       .select('id')
       .limit(1);
       
     if (coursesError) {
       console.log('Creating courses table...');
-      // Using raw SQL via the rpc method
-      const { error } = await supabase.rpc('exec_sql', {
-        sql_query: `
-          CREATE TABLE IF NOT EXISTS courses (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            name TEXT NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-          );
-        `
-      });
-      
-      if (error) throw error;
+      try {
+        // Using raw SQL via the rpc method
+        const { error } = await supabase.rpc('exec_sql', {
+          sql_query: `
+            CREATE TABLE IF NOT EXISTS courses (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              name TEXT NOT NULL,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+            );
+          `
+        });
+        
+        if (error) throw error;
+      } catch (err) {
+        console.error('Failed to create courses table:', err);
+        throw err;
+      }
     }
 
     // Create students table if it doesn't exist
-    const { error: studentsError } = await supabase
+    const { data: studentsData, error: studentsError } = await supabase
       .from('students')
       .select('id')
       .limit(1);
       
     if (studentsError) {
       console.log('Creating students table...');
-      const { error } = await supabase.rpc('exec_sql', {
-        sql_query: `
-          CREATE TABLE IF NOT EXISTS students (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            enrollment_date DATE NOT NULL,
-            last_activity_date DATE NOT NULL,
-            course_id UUID REFERENCES courses(id) NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-          );
-        `
-      });
-      
-      if (error) throw error;
+      try {
+        const { error } = await supabase.rpc('exec_sql', {
+          sql_query: `
+            CREATE TABLE IF NOT EXISTS students (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              enrollment_date DATE NOT NULL,
+              last_activity_date DATE NOT NULL,
+              course_id UUID REFERENCES courses(id) NOT NULL,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+            );
+          `
+        });
+        
+        if (error) throw error;
+      } catch (err) {
+        console.error('Failed to create students table:', err);
+        throw err;
+      }
     }
 
     // Create quizzes table if it doesn't exist
