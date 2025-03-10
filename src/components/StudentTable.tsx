@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
@@ -7,7 +8,6 @@ import {
   ChevronsLeft, 
   ChevronsRight,
   ArrowUpDown,
-  Award,
   ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -54,6 +54,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     // Debug what we received
     console.log("Raw students data:", students.map(s => ({
       name: s.fullName,
+      email: s.email,
       rawScore: s.score,
       courseCompleted: s.courseCompleted,
       quizzes: s.quizScores?.length || 0
@@ -73,6 +74,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
     
     console.log("Normalized students data:", normalized.map(s => ({
       name: s.fullName,
+      email: s.email,
       normalizedScore: s.score,
       courseCompleted: s.courseCompleted,
       quizzes: s.quizScores?.length || 0
@@ -156,6 +158,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   // Debug scores
   console.log("DEBUG - StudentTable: Students with scores:", formattedStudents.map(s => ({
     name: s.fullName,
+    email: s.email,
     score: s.score,
     quizCount: s.quizScores.length
   })));

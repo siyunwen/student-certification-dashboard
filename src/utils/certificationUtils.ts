@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore } from './scoreUtils';
 
@@ -161,7 +160,6 @@ export const parseFileContent = (filename: string, content: string): ParsedFile 
   return { type, courseName, data };
 };
 
-// Function to parse CSV line with quoted fields
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let inQuote = false;
@@ -200,6 +198,9 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
   } else {
     // Format: "First Last"
     const parts = name.split(' ');
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: '' };
+    }
     return {
       firstName: parts[0] || '',
       lastName: parts.slice(1).join(' ') || ''
@@ -303,13 +304,15 @@ export const groupFilesByCourse = (files: ParsedFile[]): Record<string, CourseDa
 
 export const isValidStudent = (student: any): boolean => {
   // Check if student has name and email
-  if (!student.firstName || !student.lastName || !student.email) {
+  if (!student.firstName || !student.email) {
+    console.log(`Filtering out invalid student: missing firstName or email`, student);
     return false;
   }
   
-  // Filter out andrew.cmu.edu and cmu.edu emails
-  if (student.email.toLowerCase().endsWith('andrew.cmu.edu') || 
-      student.email.toLowerCase().endsWith('cmu.edu')) {
+  // Filter out andrew.cmu.edu and cmu.edu emails - IMPORTANT! This filter must work correctly
+  const email = student.email.toLowerCase();
+  if (email.endsWith('@andrew.cmu.edu') || email.endsWith('@cmu.edu')) {
+    console.log(`Filtering out CMU student email: ${email}`);
     return false;
   }
   
@@ -351,28 +354,32 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       const name = studentData[nameField] || '';
       console.log(`Student raw name from ${nameField} field: "${name}"`);
       
-      const { firstName, lastName } = parseStudentName(name, false);
+      // Detect name format - if it contains a comma, it's likely "Last, First" format
+      const hasComma = name.includes(',');
+      const { firstName, lastName } = parseStudentName(name, hasComma);
       const email = studentData.email || '';
-      const lastActivityDate = studentData.last_interaction ? 
-        studentData.last_interaction.split(' ')[0] : // Extract date part only
-        new Date().toISOString().split('T')[0];
       
-      // Skip invalid entries
-      if (!firstName || !lastName || !email) {
-        console.log(`Skipping invalid student data: missing name or email (${name}, ${email})`);
-        return;
-      }
+      console.log(`Parsed name: firstName="${firstName}", lastName="${lastName}", email="${email}"`);
       
-      // Skip cmu.edu and andrew.cmu.edu emails
-      if (email.toLowerCase().endsWith('andrew.cmu.edu') || 
-          email.toLowerCase().endsWith('cmu.edu')) {
+      // Early check for CMU emails - immediately skip these students
+      if (email.toLowerCase().endsWith('@andrew.cmu.edu') || email.toLowerCase().endsWith('@cmu.edu')) {
         console.log(`Skipping CMU student: ${name}, ${email}`);
         return;
       }
       
+      // Skip invalid entries
+      if (!firstName || !email) {
+        console.log(`Skipping invalid student data: missing firstName or email (${name}, ${email})`);
+        return;
+      }
+      
+      const lastActivityDate = studentData.last_interaction ? 
+        studentData.last_interaction.split(' ')[0] : // Extract date part only
+        new Date().toISOString().split('T')[0];
+      
       // Create a key using email
       const key = email.toLowerCase();
-      const fullName = `${firstName} ${lastName}`;
+      const fullName = `${firstName} ${lastName}`.trim();
       const normalizedName = normalizeNameForComparison(fullName);
       
       if (!studentMap[key]) {
@@ -422,6 +429,12 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       if (quizData.email) {
         const email = quizData.email.toLowerCase();
         
+        // Skip CMU emails in quiz data too
+        if (email.endsWith('@andrew.cmu.edu') || email.endsWith('@cmu.edu')) {
+          console.log(`Skipping CMU student in quiz data: ${email}`);
+          return;
+        }
+        
         // Try to find direct email match
         if (emailMap[email]) {
           const student = emailMap[email];
@@ -463,8 +476,8 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
         lastName = parsedLast;
       }
       
-      const fullName = `${firstName} ${lastName}`;
-      const reversedFullName = `${lastName}, ${firstName}`;
+      const fullName = `${firstName} ${lastName}`.trim();
+      const reversedFullName = lastName ? `${lastName}, ${firstName}` : firstName;
       
       // Normalize names for better matching
       const normalizedFullName = normalizeNameForComparison(fullName);
@@ -601,9 +614,16 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
     console.log(`DEBUG: Final average score: ${student.score}`);
   }
   
-  // Convert map to array
+  // Convert map to array and ensure all students are valid
   for (const key in studentMap) {
     const student = studentMap[key];
+    
+    // Double-check we're not including CMU emails
+    if (student.email.toLowerCase().endsWith('@andrew.cmu.edu') || 
+        student.email.toLowerCase().endsWith('@cmu.edu')) {
+      console.log(`Filtering out CMU student before final list: ${student.fullName} (${student.email})`);
+      continue;
+    }
     
     // Only add valid students
     if (isValidStudent(student)) {
@@ -617,6 +637,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
   if (students.length > 0) {
     console.log(`First 3 students:`, students.slice(0, 3).map(s => ({
       name: s.fullName,
+      email: s.email,
       score: s.score,
       quizCount: s.quizScores.length,
       quizScores: s.quizScores.map(q => ({ name: q.quizName, score: q.score }))
