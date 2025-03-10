@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -195,7 +196,7 @@ export const parseStudentName = (name: string, isLastFirstFormat: boolean): { fi
     // Format: "Last, First"
     const parts = name.split(',').map(part => part.trim());
     return {
-      firstName: parts[1] || '',
+      firstName: parts.length > 1 ? parts[1] : '',
       lastName: parts[0] || ''
     };
   } else {
@@ -266,7 +267,7 @@ export const combineStudentAndQuizData = (studentFiles: ParsedFile[], quizFiles:
       // Extract email - critical for filtering out CMU emails
       const email = studentData.email || '';
       
-      // Early check for CMU emails - immediately skip these students
+      // Skip CMU emails immediately
       if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
         console.log(`Skipping CMU student: ${name}, ${email}`);
         return;
