@@ -4,61 +4,102 @@ import { supabase } from './supabase';
 // Function to initialize database tables
 export const initDatabase = async (): Promise<void> => {
   try {
-    // Create courses table
-    await supabase.from('courses').select('id').limit(1).catch(() => {
-      return supabase.query(`
-        CREATE TABLE IF NOT EXISTS courses (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          name TEXT NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-        );
-      `);
-    });
+    // Create courses table if it doesn't exist
+    const { error: coursesError } = await supabase
+      .from('courses')
+      .select('id')
+      .limit(1);
+      
+    if (coursesError) {
+      console.log('Creating courses table...');
+      // Using raw SQL via the rpc method
+      const { error } = await supabase.rpc('exec_sql', {
+        sql_query: `
+          CREATE TABLE IF NOT EXISTS courses (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            name TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+          );
+        `
+      });
+      
+      if (error) throw error;
+    }
 
-    // Create students table
-    await supabase.from('students').select('id').limit(1).catch(() => {
-      return supabase.query(`
-        CREATE TABLE IF NOT EXISTS students (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          first_name TEXT NOT NULL,
-          last_name TEXT NOT NULL,
-          email TEXT NOT NULL,
-          enrollment_date DATE NOT NULL,
-          last_activity_date DATE NOT NULL,
-          course_id UUID REFERENCES courses(id) NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-        );
-      `);
-    });
+    // Create students table if it doesn't exist
+    const { error: studentsError } = await supabase
+      .from('students')
+      .select('id')
+      .limit(1);
+      
+    if (studentsError) {
+      console.log('Creating students table...');
+      const { error } = await supabase.rpc('exec_sql', {
+        sql_query: `
+          CREATE TABLE IF NOT EXISTS students (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            enrollment_date DATE NOT NULL,
+            last_activity_date DATE NOT NULL,
+            course_id UUID REFERENCES courses(id) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+          );
+        `
+      });
+      
+      if (error) throw error;
+    }
 
-    // Create quizzes table
-    await supabase.from('quizzes').select('id').limit(1).catch(() => {
-      return supabase.query(`
-        CREATE TABLE IF NOT EXISTS quizzes (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          student_id UUID REFERENCES students(id) NOT NULL,
-          quiz_name TEXT NOT NULL,
-          score NUMERIC NOT NULL,
-          completed_at DATE NOT NULL,
-          course_id UUID REFERENCES courses(id) NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-        );
-      `);
-    });
+    // Create quizzes table if it doesn't exist
+    const { error: quizzesError } = await supabase
+      .from('quizzes')
+      .select('id')
+      .limit(1);
+      
+    if (quizzesError) {
+      console.log('Creating quizzes table...');
+      const { error } = await supabase.rpc('exec_sql', {
+        sql_query: `
+          CREATE TABLE IF NOT EXISTS quizzes (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id UUID REFERENCES students(id) NOT NULL,
+            quiz_name TEXT NOT NULL,
+            score NUMERIC NOT NULL,
+            completed_at DATE NOT NULL,
+            course_id UUID REFERENCES courses(id) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+          );
+        `
+      });
+      
+      if (error) throw error;
+    }
 
-    // Create certification settings table
-    await supabase.from('certification_settings').select('id').limit(1).catch(() => {
-      return supabase.query(`
-        CREATE TABLE IF NOT EXISTS certification_settings (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          pass_threshold NUMERIC NOT NULL,
-          date_since DATE,
-          user_id UUID NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
-        );
-      `);
-    });
+    // Create certification settings table if it doesn't exist
+    const { error: certificationError } = await supabase
+      .from('certification_settings')
+      .select('id')
+      .limit(1);
+      
+    if (certificationError) {
+      console.log('Creating certification_settings table...');
+      const { error } = await supabase.rpc('exec_sql', {
+        sql_query: `
+          CREATE TABLE IF NOT EXISTS certification_settings (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            pass_threshold NUMERIC NOT NULL,
+            date_since DATE,
+            user_id UUID NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+          );
+        `
+      });
+      
+      if (error) throw error;
+    }
     
     console.log('Database tables created successfully');
     

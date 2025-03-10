@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useEffect, useState } from "react";
 import { initDatabase } from "./lib/dbInit";
+import { setupSqlFunction } from "./lib/setupSqlFunction";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -27,12 +28,15 @@ const App = () => {
   useEffect(() => {
     const initializeDatabase = async () => {
       try {
+        // First create the SQL execution function if needed
+        await setupSqlFunction();
+        // Then initialize the database tables
         await initDatabase();
         toast.success('Database initialized successfully');
         setInitializing(false);
       } catch (error) {
         console.error('Database initialization failed:', error);
-        setInitError('Failed to initialize database. Please try refreshing the page or check if Supabase has the right permissions.');
+        setInitError('Failed to initialize database. Please check console for details.');
         setInitializing(false);
         
         // Refresh the query client to retry fetching data
