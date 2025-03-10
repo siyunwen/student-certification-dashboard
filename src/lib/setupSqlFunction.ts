@@ -61,11 +61,11 @@ export const setupSqlFunction = async (): Promise<void> => {
       
       console.log('RPC method failed, trying REST API...', rpcError);
       
-      // Execute the SQL directly using the REST API
-      const supabaseUrl = 'https://tobscknzwwmqijpxaowj.supabase.co';
-      const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYnNja256d3dtcWlqcHhhb3dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE1ODAxMTcsImV4cCI6MjA1NzE1NjExN30.mNTCvpY_nlv5ItdP-q5GYA6Z82vsJaSTvlqiBi57zE0';
+      // Get the Supabase URL and key from the supabase client
+      const supabaseUrl = supabase.supabaseUrl;
+      const supabaseKey = supabase.supabaseKey;
       
-      // Try the SQL API endpoint
+      // Execute the SQL directly using the REST API
       const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
         method: 'POST',
         headers: {
@@ -90,6 +90,10 @@ export const setupSqlFunction = async (): Promise<void> => {
       
       // Last attempt - try using the SQL HTTP endpoint directly
       try {
+        // Get URL and key from the client again to be safe
+        const supabaseUrl = supabase.supabaseUrl;
+        const supabaseKey = supabase.supabaseKey;
+        
         const response = await fetch(`${supabaseUrl}/rest/v1/`, {
           method: 'POST',
           headers: {
