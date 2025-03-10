@@ -10,7 +10,6 @@ import { Student, CertificationSettings as SettingsType, CertificationStats, Par
 import { 
   calculateCertificationStats,
   getEligibleStudents,
-  combineStudentAndQuizData,
   groupFilesByCourse
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -18,6 +17,8 @@ import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Ey
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { fetchStudents, saveCertificationSettings, fetchCertificationSettings } from '@/services/supabaseService';
+import { useQuery, useMutation } from '@tanstack/react-query';
 
 const COLORS = ['#2563eb', '#e5e7eb'];
 
@@ -42,63 +43,62 @@ const Index = () => {
   
   // Get unique course names with complete data
   const courseNames = Object.keys(courseMap).filter(name => courseMap[name].isComplete);
+
+  // Fetch students from Supabase
+  const { data: studentsData, isLoading: isLoadingStudents, error: studentError } = useQuery({
+    queryKey: ['students'],
+    queryFn: fetchStudents
+  });
+  
+  // Fetch certification settings from Supabase
+  const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
+    queryKey: ['certificationSettings'],
+    queryFn: fetchCertificationSettings
+  });
+
+  // Update certification settings in Supabase
+  const { mutate: updateSettings } = useMutation({
+    mutationFn: saveCertificationSettings,
+    onSuccess: () => {
+      toast.success('Settings saved successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to save settings');
+      console.error('Error saving settings:', error);
+    }
+  });
   
   // Recalculate stats when students or settings change
   useEffect(() => {
     setStats(calculateCertificationStats(students, settings));
   }, [students, settings]);
   
-  // Process files when they are uploaded
+  // Set students from Supabase data when available
   useEffect(() => {
-    if (parsedFiles.length > 0) {
-      processFiles();
+    if (studentsData) {
+      setStudents(studentsData);
+      setShowResults(true);
     }
-  }, [parsedFiles]);
+  }, [studentsData]);
+  
+  // Set settings from Supabase data when available
+  useEffect(() => {
+    if (settingsData) {
+      setSettings(settingsData);
+    }
+  }, [settingsData]);
   
   const handleFilesLoaded = (files: ParsedFile[]) => {
     setParsedFiles(files);
-    setShowResults(false); // Hide results when new files are loaded
+    // In a real implementation, we would upload and process these files
+    // through a Supabase Edge Function
+    toast.info('Files will be processed through Supabase in a future update');
   };
   
-  const processFiles = () => {
-    try {
-      // Get only the complete courses (with both student and quiz files)
-      const completeCourses = Object.entries(courseMap)
-        .filter(([_, course]) => course.isComplete)
-        .map(([_, course]) => ({
-          studentFile: course.studentFile!,
-          quizFile: course.quizFile!
-        }));
-      
-      if (completeCourses.length === 0) {
-        // Don't process if no complete courses
-        if (parsedFiles.length > 0) {
-          // Don't show a toast here, as we don't want to show warnings for just one file
-          console.log('Waiting for complete course data (both student and quiz files)');
-        }
-        setStudents([]);
-        return;
-      }
-      
-      // Process each complete course
-      const allStudents: Student[] = [];
-      
-      completeCourses.forEach(course => {
-        const courseStudents = combineStudentAndQuizData([course.studentFile], [course.quizFile]);
-        allStudents.push(...courseStudents);
-      });
-      
-      setStudents(allStudents);
-      
-      if (allStudents.length === 0) {
-        toast.warning('No valid student data could be extracted from the files');
-      } else {
-        toast.success(`Processed ${allStudents.length} students from ${completeCourses.length} courses`);
-      }
-    } catch (error) {
-      console.error('Error processing files:', error);
-      toast.error('Failed to process the files. Please check the format.');
-    }
+  const handleSettingsChange = (newSettings: SettingsType) => {
+    setSettings(newSettings);
+    // Save settings to Supabase
+    updateSettings(newSettings);
   };
   
   const generateReport = () => {
@@ -134,13 +134,11 @@ const Index = () => {
   };
   
   const handleShowResults = () => {
-    if (completeCoursesCount === 0) {
-      toast.info('Please upload both student and quiz files for at least one course');
+    if (completeCoursesCount === 0 && students.length === 0) {
+      toast.info('Please upload files or fetch data from the database');
       return;
     }
     
-    // Force processing of files to ensure we have the latest data
-    processFiles();
     setShowResults(true);
     
     // Scroll to results section
@@ -154,6 +152,11 @@ const Index = () => {
     { name: 'Eligible', value: stats.eligibleStudents },
     { name: 'Not Eligible', value: stats.totalStudents - stats.eligibleStudents }
   ];
+
+  if (studentError) {
+    toast.error('Failed to load student data');
+    console.error('Error loading students:', studentError);
+  }
   
   return (
     <div className="min-h-screen bg-white">
@@ -179,6 +182,16 @@ const Index = () => {
       </div>
       
       <main className="page-container">
+        {/* Loading indicator */}
+        {(isLoadingStudents || isLoadingSettings) && (
+          <div className="my-8 flex justify-center">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 border-2 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+              <span className="text-slate-600">Loading data from Supabase...</span>
+            </div>
+          </div>
+        )}
+
         {/* Setup Section */}
         <section className="grid gap-6 grid-cols-1 lg:grid-cols-2 mt-8">
           <DashboardCard 
@@ -215,7 +228,7 @@ const Index = () => {
           >
             <CertificationSettings 
               settings={settings} 
-              onSettingsChange={setSettings} 
+              onSettingsChange={handleSettingsChange} 
             />
           </DashboardCard>
         </section>
