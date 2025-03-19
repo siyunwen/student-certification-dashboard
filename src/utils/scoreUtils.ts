@@ -4,6 +4,11 @@
 export const normalizeScore = (value: number | string, toPercentage: boolean = true): number => {
   // If value is a string, try to convert it to a number
   if (typeof value === 'string') {
+    // Check for "Not finished" or similar indicators
+    if (isNotCompletedQuiz(value)) {
+      return 0;
+    }
+    
     // Remove any non-numeric characters except decimal points
     const cleanValue = value.replace(/[^\d.]/g, '');
     
@@ -50,6 +55,8 @@ export const isNotCompletedQuiz = (value: string | number): boolean => {
     return (
       lowerValue.includes('not') || 
       lowerValue.includes('not finished') ||
+      lowerValue === 'null' ||
+      lowerValue === 'nan' ||
       lowerValue.includes('n/a') || 
       lowerValue.includes('incomplete') ||
       lowerValue === '' ||

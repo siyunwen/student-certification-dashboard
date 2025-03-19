@@ -1,4 +1,3 @@
-
 import { supabase } from '@/lib/supabase';
 import { Student, CertificationSettings, ParsedFile } from '@/types/student';
 import { StudentRecord, CourseRecord, QuizRecord, CertificationSettingsRecord } from '@/types/database';
@@ -51,10 +50,13 @@ function transformStudentData(
   // Filter out CMU emails at the transformation stage
   const filteredStudentRecords = studentRecords.filter(student => {
     const email = student.email.toLowerCase();
-    return !email.includes('@andrew.cmu.edu') && !email.includes('@cmu.edu');
+    // Also filter out example.com emails which are likely sample data
+    return !email.includes('@andrew.cmu.edu') && 
+           !email.includes('@cmu.edu') && 
+           !email.includes('@example.com');
   });
 
-  console.log(`Filtered out ${studentRecords.length - filteredStudentRecords.length} CMU email addresses`);
+  console.log(`Filtered out ${studentRecords.length - filteredStudentRecords.length} CMU and example.com email addresses`);
 
   return filteredStudentRecords.map(student => {
     // Find all quizzes for this student
@@ -398,7 +400,7 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
       }
     }
     
-    // Remove any sample data that might exist from previous initializations
+    // Make sure to call this BEFORE returning
     await cleanupSampleData();
     
     // Fetch the updated student data
@@ -417,7 +419,7 @@ export async function uploadAndProcessFiles(parsedFiles: ParsedFile[]): Promise<
 // Function to cleanup any sample data that might have been created during initialization
 async function cleanupSampleData() {
   try {
-    console.log('Checking for sample data to clean up...');
+    console.log('Cleaning up sample data...');
     
     // Get sample emails
     const sampleEmails = [
@@ -465,7 +467,7 @@ async function cleanupSampleData() {
       console.log('No sample students found');
     }
     
-    // Check for sample courses (only if they have no real students)
+    // Check for sample courses
     const sampleCourseNames = [
       'AI Fundamentals 101',
       'Data Science Basics',
@@ -481,29 +483,63 @@ async function cleanupSampleData() {
         .single();
       
       if (course) {
-        // Check if course has any non-sample students
-        const { data: nonSampleStudents, error: countError } = await supabase
+        // Delete all students and quizzes in this course first
+        const { data: courseStudents } = await supabase
           .from('students')
           .select('id')
-          .eq('course_id', course.id)
-          .not('email', 'in', sampleEmails);
+          .eq('course_id', course.id);
         
-        if (!countError && (!nonSampleStudents || nonSampleStudents.length === 0)) {
-          // No real students, safe to delete this course
-          const { error: courseDeleteError } = await supabase
-            .from('courses')
-            .delete()
-            .eq('id', course.id);
+        if (courseStudents && courseStudents.length > 0) {
+          const studentIds = courseStudents.map(s => s.id);
           
-          if (courseDeleteError) {
-            console.error(`Error deleting sample course ${courseName}:`, courseDeleteError);
-          } else {
-            console.log(`Sample course ${courseName} deleted successfully`);
-          }
+          // Delete quizzes
+          await supabase
+            .from('quizzes')
+            .delete()
+            .in('student_id', studentIds);
+          
+          // Delete students
+          await supabase
+            .from('students')
+            .delete()
+            .in('id', studentIds);
+        }
+        
+        // Now delete the course
+        const { error: courseDeleteError } = await supabase
+          .from('courses')
+          .delete()
+          .eq('id', course.id);
+        
+        if (courseDeleteError) {
+          console.error(`Error deleting sample course ${courseName}:`, courseDeleteError);
         } else {
-          console.log(`Course ${courseName} has real students, preserving it`);
+          console.log(`Sample course ${courseName} deleted successfully`);
         }
       }
+    }
+    
+    // Double check to see if we have any leftover example.com emails
+    const { data: remainingExampleStudents } = await supabase
+      .from('students')
+      .select('id, email')
+      .filter('email', 'ilike', '%example.com%');
+    
+    if (remainingExampleStudents && remainingExampleStudents.length > 0) {
+      console.log(`Found ${remainingExampleStudents.length} remaining example.com students to remove`);
+      const studentIds = remainingExampleStudents.map(s => s.id);
+      
+      // Delete quizzes
+      await supabase
+        .from('quizzes')
+        .delete()
+        .in('student_id', studentIds);
+      
+      // Delete students
+      await supabase
+        .from('students')
+        .delete()
+        .in('id', studentIds);
     }
     
   } catch (error) {
