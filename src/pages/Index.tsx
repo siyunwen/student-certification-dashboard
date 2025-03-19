@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -177,16 +178,7 @@ const Index = () => {
             title="Student Certification Dashboard"
             description="Upload student data files and quiz scores, customize certification criteria, and view eligible students"
           >
-            {showResults && students.length > 0 && (
-              <Button
-                className="flex items-center gap-2"
-                onClick={generateReport}
-                variant="default"
-              >
-                <Download className="h-4 w-4" />
-                Export Eligible Students
-              </Button>
-            )}
+            {/* Removed the export button from here */}
           </DashboardHeader>
         </div>
       </div>
@@ -287,7 +279,22 @@ const Index = () => {
             
             {students.length > 0 && (
               <section className="section mt-8 animate-fade-in">
-                <h2 className="section-title">Certification Overview</h2>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                  <h2 className="section-title">Certification Overview</h2>
+                  
+                  {/* Added export button here */}
+                  {stats.eligibleStudents > 0 && (
+                    <Button
+                      className="flex items-center gap-2 ml-0 mt-2 sm:mt-0"
+                      onClick={generateReport}
+                      variant="default"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export Eligible Students
+                    </Button>
+                  )}
+                </div>
+                
                 <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
                   <DashboardCard className="relative overflow-hidden">
                     <div className="absolute top-3 right-3 w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
