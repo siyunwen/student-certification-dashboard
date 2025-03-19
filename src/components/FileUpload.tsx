@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -85,8 +86,12 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
       toast.error('Some files were skipped. Please upload only CSV, TXT, XLSX or XLS files');
     }
     
-    if (validFiles.length === 0) return;
+    if (validFiles.length === 0) {
+      toast.error('No valid files found. Please upload CSV, TXT, XLSX or XLS files');
+      return;
+    }
     
+    // First set the files state to show progress
     setFiles(prev => [...prev, ...validFiles]);
     setIsLoading(true);
     
@@ -99,13 +104,16 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
             const content = event.target?.result as string;
             const parsedFile = parseCSVData(file.name, content);
             console.log(`File '${file.name}' parsed as course: '${parsedFile.courseName}'`);
+            console.log(`File type: ${parsedFile.type}, records: ${parsedFile.data.length}`);
             resolve(parsedFile);
           } catch (error) {
+            console.error(`Error parsing file ${file.name}:`, error);
             reject(error);
           }
         };
         
         reader.onerror = () => {
+          console.error(`Failed to read file: ${file.name}`);
           reject(new Error(`Failed to read file: ${file.name}`));
         };
         
@@ -115,17 +123,31 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     
     Promise.all(filePromises)
       .then(async results => {
+        if (results.length === 0) {
+          toast.error('No files could be processed. Please check file format.');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log(`Successfully parsed ${results.length} files`);
         const newParsedFiles = [...parsedFiles, ...results];
         setParsedFiles(newParsedFiles);
         
         setIsProcessing(true);
         try {
+          console.log('Processing files...');
           const result = await processFiles(newParsedFiles);
-          onFilesLoaded(result.parsedFiles);
-          toast.success(`${validFiles.length} file(s) processed successfully`);
+          console.log('Files processed:', result);
+          
+          if (result.parsedFiles.length > 0) {
+            onFilesLoaded(result.parsedFiles);
+            toast.success(`${validFiles.length} file(s) processed successfully`);
+          } else {
+            toast.warning('Files were processed but no valid student data was found. Please check file format.');
+          }
         } catch (error) {
           console.error('Error processing files:', error);
-          toast.error('Failed to process data');
+          toast.error('Failed to process data. Please check console for details.');
         } finally {
           setIsProcessing(false);
         }
