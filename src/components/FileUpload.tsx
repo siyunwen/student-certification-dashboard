@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ParsedFile } from '@/types/student';
 import { parseCSVData } from '@/utils/certificationUtils';
-import { uploadAndProcessFiles } from '@/services/supabaseService';
+import { processFiles } from '@/services/localStorageService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface FileUploadProps {
@@ -19,7 +20,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showFileFormatHelp, setShowFileFormatHelp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,7 +33,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     setIsDragging(false);
   };
 
-  const processFiles = (newFiles: File[]) => {
+  const processUploadedFiles = (newFiles: File[]) => {
     if (!newFiles.length) return;
     
     const validFiles = newFiles.filter(file => {
@@ -94,14 +95,14 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const droppedFiles = Array.from(e.dataTransfer.files);
-      processFiles(droppedFiles);
+      processUploadedFiles(droppedFiles);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFiles = Array.from(e.target.files);
-      processFiles(selectedFiles);
+      processUploadedFiles(selectedFiles);
     }
   };
 
@@ -149,7 +150,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     return courseStatus;
   };
 
-  const uploadToSupabase = async () => {
+  const processFilesLocally = async () => {
     const courseStatus = getCourseCompleteness();
     const completeCoursesCount = Object.values(courseStatus).filter(
       status => status.hasStudent && status.hasQuiz
@@ -160,17 +161,17 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
       return;
     }
     
-    setIsUploading(true);
+    setIsProcessing(true);
     
     try {
-      const result = await uploadAndProcessFiles(parsedFiles);
-      toast.success('Data successfully saved to Supabase!');
+      const result = await processFiles(parsedFiles);
+      toast.success('Data successfully processed!');
       onFilesLoaded(result.parsedFiles);
     } catch (error) {
-      console.error('Error uploading to Supabase:', error);
-      toast.error('Failed to save data to Supabase');
+      console.error('Error processing files:', error);
+      toast.error('Failed to process data');
     } finally {
-      setIsUploading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -322,17 +323,17 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
             {completeCoursesCount > 0 && (
               <div className="mt-4">
                 <Button 
-                  onClick={uploadToSupabase}
+                  onClick={processFilesLocally}
                   className="w-full"
-                  disabled={isUploading}
+                  disabled={isProcessing}
                 >
-                  {isUploading ? (
+                  {isProcessing ? (
                     <>
                       <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
-                      Saving to Supabase...
+                      Processing Data...
                     </>
                   ) : (
-                    <>Save Data to Supabase</>
+                    <>Process Data</>
                   )}
                 </Button>
               </div>

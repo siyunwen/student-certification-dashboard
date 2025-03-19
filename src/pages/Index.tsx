@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -5,18 +6,19 @@ import FileUpload from '@/components/FileUpload';
 import CertificationSettings from '@/components/CertificationSettings';
 import StudentTable from '@/components/StudentTable';
 import AnimatedNumber from '@/components/AnimatedNumber';
-import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile, CourseData } from '@/types/student';
+import { Student, CertificationSettings as SettingsType, CertificationStats, ParsedFile } from '@/types/student';
 import { 
   calculateCertificationStats,
   getEligibleStudents
 } from '@/utils/certificationUtils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Award, Users, BarChart, TrendingUp, Download, BookOpen, AlertCircle, Eye, FileUp } from 'lucide-react';
+import { Award, Users, BarChart, TrendingUp, Download, BookOpen, FileUp, Eye, Info, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { fetchStudents, saveCertificationSettings, fetchCertificationSettings } from '@/services/supabaseService';
+import { fetchStudents, saveCertificationSettings, fetchCertificationSettings, clearStoredData } from '@/services/localStorageService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const COLORS = ['#2563eb', '#e5e7eb'];
 
@@ -51,8 +53,7 @@ const Index = () => {
 
   const { data: students = [], isLoading: isLoadingStudents, error: studentError } = useQuery({
     queryKey: ['students'],
-    queryFn: fetchStudents,
-    enabled: true
+    queryFn: fetchStudents
   });
 
   const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
@@ -68,6 +69,21 @@ const Index = () => {
     onError: (error) => {
       toast.error('Failed to save settings');
       console.error('Error saving settings:', error);
+    }
+  });
+
+  const { mutate: clearData } = useMutation({
+    mutationFn: clearStoredData,
+    onSuccess: () => {
+      toast.success('All data cleared successfully');
+      setParsedFiles([]);
+      setShowResults(false);
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['certificationSettings'] });
+    },
+    onError: (error) => {
+      toast.error('Failed to clear data');
+      console.error('Error clearing data:', error);
     }
   });
 
@@ -123,12 +139,12 @@ const Index = () => {
 
   const handleShowResults = () => {
     if (completeCoursesCount === 0 && students.length === 0) {
-      toast.info('Please upload files or fetch data from the database');
+      toast.info('Please upload files and process data first');
       return;
     }
     
     if (students.length === 0) {
-      toast.info('No student data found. Please upload files first.');
+      toast.info('No student data found. Please upload and process files first.');
       return;
     }
     
@@ -137,6 +153,12 @@ const Index = () => {
     setTimeout(() => {
       document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleClearAllData = () => {
+    if (confirm("Are you sure you want to clear all data? This action cannot be undone.")) {
+      clearData();
+    }
   };
 
   const chartData = [
@@ -172,11 +194,18 @@ const Index = () => {
       </div>
       
       <main className="page-container">
+        <Alert className="my-4 bg-slate-50 border-slate-200">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            This is a frontend-only application. All data is stored in your browser's local storage and will persist between visits.
+          </AlertDescription>
+        </Alert>
+
         {(isLoadingStudents || isLoadingSettings) && (
           <div className="my-8 flex justify-center">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 border-2 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
-              <span className="text-slate-600">Loading data from Supabase...</span>
+              <span className="text-slate-600">Loading data from local storage...</span>
             </div>
           </div>
         )}
@@ -222,14 +251,26 @@ const Index = () => {
         </section>
         
         <section className="mt-8 flex justify-center">
-          <Button 
-            onClick={handleShowResults} 
-            className="w-full max-w-md py-6 text-lg"
-            size="lg"
-          >
-            <Eye className="mr-2 h-5 w-5" />
-            Show Certification Results
-          </Button>
+          <div className="w-full max-w-md flex flex-col gap-3">
+            <Button 
+              onClick={handleShowResults} 
+              className="w-full py-6 text-lg"
+              size="lg"
+            >
+              <Eye className="mr-2 h-5 w-5" />
+              Show Certification Results
+            </Button>
+            
+            {students.length > 0 && (
+              <Button 
+                onClick={handleClearAllData} 
+                variant="outline"
+                className="text-sm"
+              >
+                Clear All Data
+              </Button>
+            )}
+          </div>
         </section>
         
         {showResults && (

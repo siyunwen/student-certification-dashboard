@@ -1,4 +1,6 @@
 
+// This file is kept for compatibility, but we no longer use database-specific types
+// in the frontend-only version of the application
 export type StudentRecord = {
   id: string;
   first_name: string;
