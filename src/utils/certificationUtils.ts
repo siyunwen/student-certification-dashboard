@@ -29,15 +29,29 @@ export function calculateCertificationStats(
   const eligibleStudents = getEligibleStudents(filteredStudents, settings).length;
   
   // Calculate average score and pass rate
-  const totalScore = filteredStudents.reduce((sum, student) => sum + student.score, 0);
+  const totalScore = filteredStudents.reduce((sum, student) => sum + (student.score || 0), 0);
   const averageScore = totalStudents > 0 ? totalScore / totalStudents : 0;
   const passRate = totalStudents > 0 ? (eligibleStudents / totalStudents) * 100 : 0;
+  
+  // Calculate course-specific average scores
+  const coursePrefixes = detectCoursePrefixes(filteredStudents);
+  const courseAverages = coursePrefixes.map(prefix => {
+    const courseStudents = filteredStudents.filter(s => s.courseName && s.courseName.startsWith(prefix));
+    const courseTotal = courseStudents.reduce((sum, s) => sum + (s.score || 0), 0);
+    const courseAvg = courseStudents.length > 0 ? courseTotal / courseStudents.length : 0;
+    
+    return {
+      coursePrefix: prefix,
+      avgScore: courseAvg
+    };
+  });
   
   return {
     totalStudents,
     eligibleStudents,
     averageScore,
-    passRate
+    passRate,
+    courseAverages
   };
 }
 
@@ -413,4 +427,3 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     data
   };
 }
-

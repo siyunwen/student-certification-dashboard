@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
@@ -116,6 +115,17 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   const start = (page - 1) * rowsPerPage;
   const paginatedStudents = sortedStudents.slice(start, start + rowsPerPage);
   
+  const courseAverageScore = () => {
+    const relevantStudents = selectedCourse 
+      ? formattedStudents.filter(s => s.courseName === selectedCourse)
+      : formattedStudents;
+    
+    if (relevantStudents.length === 0) return 0;
+    
+    const sum = relevantStudents.reduce((total, student) => total + (student.score || 0), 0);
+    return (sum / relevantStudents.length).toFixed(1);
+  };
+  
   const handleSort = (field: SortField) => {
     if (field === sortField) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -184,7 +194,12 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
           {selectedStudents.length > 0 ? (
             <span>{selectedStudents.length} selected</span>
           ) : (
-            <span>{sortedStudents.length} students found</span>
+            <div className="flex flex-col items-end">
+              <span>{sortedStudents.length} students found</span>
+              {selectedCourse && (
+                <span className="font-medium text-brand-600">Avg. score: {courseAverageScore()}%</span>
+              )}
+            </div>
           )}
         </div>
       </div>

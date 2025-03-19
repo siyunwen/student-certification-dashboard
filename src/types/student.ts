@@ -3,17 +3,21 @@ export interface Student {
   id: string;
   firstName: string;
   lastName: string;
-  fullName: string;
-  email: string;
+  fullName?: string;
+  email?: string;
   score: number;
-  quizScores: {
-    quizName: string;
-    score: number;
-  }[];
+  quizScores?: QuizScore[];
+  lastActivityDate?: string;
+  enrollmentDate?: string;
+  courseName?: string;
   courseCompleted: boolean;
-  enrollmentDate: string;
-  lastActivityDate: string;
-  courseName: string;
+  allCourses?: string[]; // Added to track all courses a student is enrolled in
+}
+
+export interface QuizScore {
+  quizName: string;
+  score: number | null;
+  completedAt?: string;
 }
 
 export interface CertificationSettings {
@@ -26,16 +30,17 @@ export interface CertificationStats {
   eligibleStudents: number;
   averageScore: number;
   passRate: number;
-}
-
-export interface ParsedFile {
-  type: 'student' | 'quiz';
-  courseName: string;
-  data: any[];
+  courseAverages?: { coursePrefix: string; avgScore: number }[];
 }
 
 export interface CourseData {
+  isComplete: boolean;
   studentFile?: ParsedFile;
   quizFile?: ParsedFile;
-  isComplete: boolean;
+}
+
+export interface ParsedFile {
+  courseName: string;
+  type: 'student' | 'quiz';
+  data: any[];
 }

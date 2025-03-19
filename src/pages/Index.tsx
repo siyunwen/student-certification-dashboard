@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -109,15 +108,32 @@ const Index = () => {
   const generateReport = () => {
     const eligibleStudents = getEligibleStudents(students, settings);
     
-    const headers = ['First Name', 'Last Name', 'Email', 'Average Score', 'Last Activity Date', 'Course'];
-    const rows = eligibleStudents.map(student => [
-      student.firstName,
-      student.lastName,
-      student.email,
-      student.score.toFixed(1),
-      student.lastActivityDate,
-      student.courseName
-    ]);
+    const emailGroups = eligibleStudents.reduce((groups: Record<string, Student[]>, student) => {
+      const email = student.email?.toLowerCase() || '';
+      if (!groups[email]) {
+        groups[email] = [];
+      }
+      groups[email].push(student);
+      return groups;
+    }, {});
+    
+    const headers = ['First Name', 'Last Name', 'Email', 'Average Score', 'Last Activity Date', 'Courses'];
+    const rows = Object.values(emailGroups).map(studentGroup => {
+      const firstStudent = studentGroup[0];
+      const courseNames = Array.from(new Set(studentGroup.map(s => s.courseName))).filter(Boolean).join(', ');
+      
+      const totalScore = studentGroup.reduce((sum, s) => sum + (s.score || 0), 0);
+      const avgScore = (totalScore / studentGroup.length).toFixed(1);
+      
+      return [
+        firstStudent.firstName,
+        firstStudent.lastName,
+        firstStudent.email,
+        avgScore,
+        firstStudent.lastActivityDate,
+        courseNames
+      ];
+    });
     
     const csvContent = [
       headers.join(','),
@@ -282,7 +298,6 @@ const Index = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
                   <h2 className="section-title">Certification Overview</h2>
                   
-                  {/* Added export button here */}
                   {stats.eligibleStudents > 0 && (
                     <Button
                       className="flex items-center gap-2 ml-0 mt-2 sm:mt-0"
@@ -483,4 +498,3 @@ const Index = () => {
 };
 
 export default Index;
-
