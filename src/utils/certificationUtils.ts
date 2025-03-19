@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -10,8 +11,14 @@ export function calculateCertificationStats(
   const filteredStudents = settings.dateSince
     ? students.filter(student => {
         if (!student.lastActivityDate) return false;
+        // Convert both dates to Date objects and compare only the date parts
         const activityDate = new Date(student.lastActivityDate);
         const filterDate = new Date(settings.dateSince);
+        
+        // Reset time parts to compare only dates
+        activityDate.setHours(0, 0, 0, 0);
+        filterDate.setHours(0, 0, 0, 0);
+        
         console.log(`Comparing dates for ${student.firstName} ${student.lastName}: Activity date ${activityDate.toISOString().split('T')[0]} >= Filter date ${filterDate.toISOString().split('T')[0]}`);
         return activityDate >= filterDate;
       })
@@ -44,8 +51,14 @@ export function getEligibleStudents(
   const filteredByDate = settings.dateSince
     ? students.filter(student => {
         if (!student.lastActivityDate) return false;
+        // Convert both dates to Date objects and compare only the date parts
         const activityDate = new Date(student.lastActivityDate);
         const filterDate = new Date(settings.dateSince);
+        
+        // Reset time parts to compare only dates
+        activityDate.setHours(0, 0, 0, 0);
+        filterDate.setHours(0, 0, 0, 0);
+        
         return activityDate >= filterDate;
       })
     : students;

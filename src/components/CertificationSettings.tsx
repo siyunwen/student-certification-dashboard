@@ -43,9 +43,12 @@ const CertificationSettings = ({
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
+      // Reset time to beginning of the day for consistent comparisons
+      date.setHours(0, 0, 0, 0);
+      
       // Format as ISO string date part for consistent comparisons
       const formattedDate = format(date, 'yyyy-MM-dd');
-      console.log("Setting date filter to:", formattedDate);
+      console.log("Setting date filter to:", formattedDate, "Original date:", date.toISOString());
       
       onSettingsChange({
         ...settings,
