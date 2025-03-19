@@ -58,8 +58,12 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
   console.log('Processing parsed files:', parsedFiles);
   
   try {
-    // Group files by course
+    // Group files by course with support for course merging
     const courseMap: Record<string, { studentFile?: ParsedFile, quizFile?: ParsedFile }> = {};
+    
+    // First detect course prefixes for merging (e.g., "aifi_" in "aifi_301", "aifi_302")
+    const coursePrefixes = detectCoursePrefixes(parsedFiles);
+    console.log('Detected course prefixes for merging:', coursePrefixes);
     
     parsedFiles.forEach(file => {
       if (!file.courseName) return;
@@ -67,18 +71,54 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
       // Extract course name consistently
       const courseName = file.courseName.trim();
       
-      if (!courseMap[courseName]) {
-        courseMap[courseName] = {};
+      // Check if this course should be merged based on prefix
+      const coursePrefix = getCoursePrefixForFile(courseName, coursePrefixes);
+      const finalCourseName = coursePrefix || courseName;
+      
+      if (!courseMap[finalCourseName]) {
+        courseMap[finalCourseName] = {};
       }
       
       if (file.type === 'student') {
-        courseMap[courseName].studentFile = file;
+        // For student files, merge if there's an existing student file
+        if (courseMap[finalCourseName].studentFile) {
+          console.log(`Merging student data for course prefix: ${finalCourseName}`);
+          courseMap[finalCourseName].studentFile = mergeFiles(
+            courseMap[finalCourseName].studentFile!, 
+            file,
+            finalCourseName
+          );
+        } else {
+          // First student file for this course
+          const newFile = { ...file };
+          // If we're using a prefix, update the courseName in the file to be the prefix
+          if (coursePrefix) {
+            newFile.courseName = finalCourseName;
+          }
+          courseMap[finalCourseName].studentFile = newFile;
+        }
       } else if (file.type === 'quiz') {
-        courseMap[courseName].quizFile = file;
+        // For quiz files, merge if there's an existing quiz file
+        if (courseMap[finalCourseName].quizFile) {
+          console.log(`Merging quiz data for course prefix: ${finalCourseName}`);
+          courseMap[finalCourseName].quizFile = mergeFiles(
+            courseMap[finalCourseName].quizFile!, 
+            file,
+            finalCourseName
+          );
+        } else {
+          // First quiz file for this course
+          const newFile = { ...file };
+          // If we're using a prefix, update the courseName in the file to be the prefix
+          if (coursePrefix) {
+            newFile.courseName = finalCourseName;
+          }
+          courseMap[finalCourseName].quizFile = newFile;
+        }
       }
     });
     
-    console.log('Courses mapped:', Object.keys(courseMap));
+    console.log('Courses mapped with merging:', Object.keys(courseMap));
     
     // Process only courses that have both student and quiz files
     const completeCourses = Object.entries(courseMap).filter(
@@ -253,6 +293,56 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
     console.error('Error processing files:', error);
     throw error;
   }
+}
+
+// Helper functions for course prefix detection and file merging
+
+// Detect course prefixes for potential merging (e.g., "aifi_" from "aifi_301", "aifi_302")
+function detectCoursePrefixes(files: ParsedFile[]): string[] {
+  const courseNames = files.map(file => file.courseName);
+  const prefixMap: Record<string, number> = {};
+  
+  // Detect potential prefixes by looking for patterns like "prefix_number"
+  courseNames.forEach(name => {
+    if (!name) return;
+    
+    // Look for patterns like "aifi_301" where "aifi_" is the prefix
+    const match = name.match(/^([a-zA-Z]+_)\d+/);
+    if (match && match[1]) {
+      const prefix = match[1]; // e.g., "aifi_"
+      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+    }
+  });
+  
+  // Only consider prefixes that appear more than once
+  return Object.entries(prefixMap)
+    .filter(([_, count]) => count > 1)
+    .map(([prefix]) => prefix);
+}
+
+// Get the appropriate course prefix for a filename, if it should be merged
+function getCoursePrefixForFile(courseName: string, prefixes: string[]): string | null {
+  for (const prefix of prefixes) {
+    if (courseName.startsWith(prefix)) {
+      return prefix;
+    }
+  }
+  return null;
+}
+
+// Merge two parsed files (same type) into one
+function mergeFiles(file1: ParsedFile, file2: ParsedFile, courseName: string): ParsedFile {
+  // Make sure the files are of the same type
+  if (file1.type !== file2.type) {
+    throw new Error(`Cannot merge files of different types: ${file1.type} and ${file2.type}`);
+  }
+  
+  // Create a new file with merged data
+  return {
+    type: file1.type,
+    courseName: courseName,
+    data: [...file1.data, ...file2.data]
+  };
 }
 
 // Helper function to parse name from quiz file (usually in "Last, First" format)

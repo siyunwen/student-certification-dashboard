@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -70,7 +69,12 @@ export function getEligibleStudents(
 }
 
 // Group files by course and check if each course has both student and quiz files
+// Now supports course prefix merging
 export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseData> {
+  // First detect course prefixes for merging
+  const coursePrefixes = detectCoursePrefixes(files);
+  console.log('Detected course prefixes for grouping:', coursePrefixes);
+  
   const courseMap: Record<string, CourseData> = {};
   
   files.forEach(file => {
@@ -79,8 +83,12 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
     // Trim course name to ensure consistency
     const courseName = file.courseName.trim();
     
-    if (!courseMap[courseName]) {
-      courseMap[courseName] = {
+    // Check if this course should be grouped based on prefix
+    const coursePrefix = getCoursePrefixForFile(courseName, coursePrefixes);
+    const finalCourseName = coursePrefix || courseName;
+    
+    if (!courseMap[finalCourseName]) {
+      courseMap[finalCourseName] = {
         isComplete: false,
         studentFile: undefined,
         quizFile: undefined
@@ -88,18 +96,55 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
     }
     
     if (file.type === 'student') {
-      courseMap[courseName].studentFile = file;
+      // If there's already a student file, it means we merged files in processFiles
+      // We'll still overwrite it here for UI consistency
+      courseMap[finalCourseName].studentFile = file;
     } else if (file.type === 'quiz') {
-      courseMap[courseName].quizFile = file;
+      // If there's already a quiz file, it means we merged files in processFiles
+      // We'll still overwrite it here for UI consistency
+      courseMap[finalCourseName].quizFile = file;
     }
     
     // Update complete status
-    courseMap[courseName].isComplete = 
-      courseMap[courseName].studentFile !== undefined && 
-      courseMap[courseName].quizFile !== undefined;
+    courseMap[finalCourseName].isComplete = 
+      courseMap[finalCourseName].studentFile !== undefined && 
+      courseMap[finalCourseName].quizFile !== undefined;
   });
   
   return courseMap;
+}
+
+// Helper function to detect course prefixes for merging
+function detectCoursePrefixes(files: ParsedFile[]): string[] {
+  const courseNames = files.map(file => file.courseName);
+  const prefixMap: Record<string, number> = {};
+  
+  // Detect potential prefixes by looking for patterns like "prefix_number"
+  courseNames.forEach(name => {
+    if (!name) return;
+    
+    // Look for patterns like "aifi_301" where "aifi_" is the prefix
+    const match = name.match(/^([a-zA-Z]+_)\d+/);
+    if (match && match[1]) {
+      const prefix = match[1]; // e.g., "aifi_"
+      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+    }
+  });
+  
+  // Only consider prefixes that appear more than once
+  return Object.entries(prefixMap)
+    .filter(([_, count]) => count > 1)
+    .map(([prefix]) => prefix);
+}
+
+// Helper function to get the course prefix for a file
+function getCoursePrefixForFile(courseName: string, prefixes: string[]): string | null {
+  for (const prefix of prefixes) {
+    if (courseName.startsWith(prefix)) {
+      return prefix;
+    }
+  }
+  return null;
 }
 
 // Extract course name from file name - improved to handle course codes like "aifi_303"
@@ -368,3 +413,4 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     data
   };
 }
+
