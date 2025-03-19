@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -145,16 +144,14 @@ function detectCoursePrefixes(files: ParsedFile[]): string[] {
 function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   const prefixMap: Record<string, number> = {};
   
-  // Detect potential prefixes by looking for patterns like "prefix_number"
+  // Detect potential prefixes by looking for first 4 characters
+  // Updated to consider just the first 4 characters (e.g., "aifi" from "aifi_301")
   courseNames.forEach(name => {
-    if (!name) return;
+    if (!name || name.length < 4) return;
     
-    // Look for patterns like "aifi_301" where "aifi_" is the prefix
-    const match = name.match(/^([a-zA-Z]+_)\d+/);
-    if (match && match[1]) {
-      const prefix = match[1]; // e.g., "aifi_"
-      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
-    }
+    // Get first 4 characters as the prefix
+    const prefix = name.substring(0, 4);
+    prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
   });
   
   // Only consider prefixes that appear more than once
