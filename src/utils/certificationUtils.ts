@@ -76,7 +76,7 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 }
 
-// Extract course name from file name
+// Extract course name from file name - improved to handle course codes like "aifi_303"
 export function extractCourseName(filename: string): string {
   // Remove file extension
   const nameWithoutExt = filename.split('.')[0];
@@ -94,7 +94,7 @@ export function extractCourseName(filename: string): string {
   return nameWithoutExt;
 }
 
-// Parse name from a string (handles multiple formats)
+// Parse name from a string with improved format handling
 export function parseName(name: string): { firstName: string; lastName: string } {
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return { firstName: 'Unknown', lastName: 'Unknown' };
@@ -102,7 +102,7 @@ export function parseName(name: string): { firstName: string; lastName: string }
   
   name = name.trim();
   
-  // Format: "Last, First"
+  // Format: "Last, First" (quiz scores file format)
   if (name.includes(',')) {
     const parts = name.split(',').map(part => part.trim());
     return {
@@ -110,7 +110,7 @@ export function parseName(name: string): { firstName: string; lastName: string }
       lastName: parts[0] || 'Unknown'
     };
   } 
-  // Format: "First Last"
+  // Format: "First Last" (student file format)
   else if (name.includes(' ')) {
     const parts = name.split(' ');
     const firstName = parts[0] || 'Unknown';
@@ -123,7 +123,7 @@ export function parseName(name: string): { firstName: string; lastName: string }
   }
 }
 
-// Parse CSV data from file content - This was missing and caused a build error
+// Parse CSV data from file content
 export function parseCSVData(filename: string, content: string): ParsedFile {
   console.log(`Parsing file: ${filename}`);
   
@@ -141,14 +141,11 @@ export function parseCSVData(filename: string, content: string): ParsedFile {
   const courseName = extractCourseName(filename);
   console.log(`Extracted course name: ${courseName}`);
   
-  // Determine file type based on headers and content
-  const hasQuizScores = headers.some(h => 
-    h.toLowerCase().includes('quiz') || 
-    h.toLowerCase().includes('score') || 
-    h.toLowerCase().includes('grade')
-  );
+  // Determine file type based on filename and headers
+  const isQuizFile = filename.toLowerCase().includes('quiz_scores') || 
+                     headers.some(h => h.toLowerCase() === 'student');
   
-  const fileType = hasQuizScores ? 'quiz' : 'student';
+  const fileType = isQuizFile ? 'quiz' : 'student';
   console.log(`Detected file type: ${fileType}`);
   
   // Parse file based on its type
@@ -182,29 +179,28 @@ function parseCSVRow(row: string): string[] {
   return result;
 }
 
-// Parse a student data file
+// Parse a student data file with specific column format
 function parseStudentFile(courseName: string, headers: string[], lines: string[]): ParsedFile {
   console.log('Parsing student file with headers:', headers);
   
+  // Find key column indices based on expected format
   const nameIndex = headers.findIndex(h => 
     h.toLowerCase() === 'name' || 
-    h.toLowerCase().includes('student') || 
-    h.toLowerCase().includes('name')
+    h.toLowerCase().includes('student name')
   );
   
   const emailIndex = headers.findIndex(h => 
     h.toLowerCase() === 'email' || 
-    h.toLowerCase().includes('email') ||
-    h.toLowerCase().includes('mail')
+    h.toLowerCase().includes('email')
   );
   
-  const dateIndex = headers.findIndex(h => 
-    h.toLowerCase().includes('date') || 
-    h.toLowerCase().includes('activity') ||
-    h.toLowerCase().includes('interaction')
+  const lastInteractionIndex = headers.findIndex(h => 
+    h.toLowerCase() === 'last_interaction' || 
+    h.toLowerCase().includes('last interaction') ||
+    h.toLowerCase().includes('last_activity')
   );
   
-  if (nameIndex === -1 && emailIndex === -1) {
+  if (nameIndex === -1 || emailIndex === -1) {
     throw new Error(`Student file is missing required columns (name or email)`);
   }
   
@@ -218,25 +214,19 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
       continue;
     }
     
-    let fullName = '';
-    if (nameIndex !== -1 && rowData.length > nameIndex) {
-      fullName = rowData[nameIndex] || '';
-    }
+    let fullName = rowData[nameIndex] || '';
     
     // Parse name into first and last name
     const { firstName, lastName } = parseName(fullName);
     console.log(`Parsed name: "${fullName}" -> firstName: "${firstName}", lastName: "${lastName}"`);
     
     // Extract email
-    let email = '';
-    if (emailIndex !== -1 && rowData.length > emailIndex) {
-      email = rowData[emailIndex] || '';
-      
-      // Skip CMU emails immediately
-      if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
-        console.log(`Skipping CMU student: ${fullName}, ${email}`);
-        continue;
-      }
+    let email = rowData[emailIndex] || '';
+    
+    // Skip CMU emails immediately
+    if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
+      console.log(`Skipping CMU student: ${fullName}, ${email}`);
+      continue;
     }
     
     // Skip if both name parts and email are missing or 'Unknown'
@@ -245,10 +235,11 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
       continue;
     }
     
+    // Extract date from last_interaction (YYYY-MM-DD format)
     let lastActivityDate = '';
-    if (dateIndex !== -1 && rowData.length > dateIndex) {
-      // Extract date part (assume format starts with YYYY-MM-DD)
-      const dateValue = rowData[dateIndex] || '';
+    if (lastInteractionIndex !== -1 && rowData.length > lastInteractionIndex) {
+      const dateValue = rowData[lastInteractionIndex] || '';
+      // Extract date part in YYYY-MM-DD format
       const dateParts = dateValue.match(/\d{4}-\d{2}-\d{2}/);
       lastActivityDate = dateParts ? dateParts[0] : new Date().toISOString().split('T')[0];
     } else {
@@ -273,27 +264,21 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
   };
 }
 
-// Parse a quiz data file
+// Parse a quiz data file with specific column format
 function parseQuizFile(courseName: string, headers: string[], lines: string[]): ParsedFile {
+  // Find the student name column (expected format: "Last, First")
   const studentNameIndex = headers.findIndex(h => 
     h.toLowerCase() === 'student' || 
-    h.toLowerCase().includes('name') || 
     h.toLowerCase().includes('student')
   );
   
-  const emailIndex = headers.findIndex(h => 
-    h.toLowerCase() === 'email' || 
-    h.toLowerCase().includes('email') ||
-    h.toLowerCase().includes('mail')
-  );
-  
-  if (studentNameIndex === -1 && emailIndex === -1) {
-    throw new Error(`Quiz file is missing required student identifier column`);
+  if (studentNameIndex === -1) {
+    throw new Error(`Quiz file is missing required student column`);
   }
   
-  // Find all quiz columns (anything except student name/email)
+  // Find all quiz columns (all columns except student name are quiz scores)
   const quizIndices = headers.map((header, index) => {
-    if (index !== studentNameIndex && index !== emailIndex && header.trim() !== '') {
+    if (index !== studentNameIndex && header.trim() !== '') {
       return { index, quizName: header };
     }
     return null;
@@ -304,43 +289,44 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
   // Process each line (skipping header)
   for (let i = 1; i < lines.length; i++) {
     const rowData = parseCSVRow(lines[i]);
-    if (rowData.length <= Math.max(studentNameIndex, emailIndex)) continue;
+    if (rowData.length <= studentNameIndex) continue;
     
-    let email = '';
-    if (emailIndex !== -1 && rowData.length > emailIndex) {
-      email = rowData[emailIndex] || '';
-      
-      // Skip CMU emails immediately
-      if (email.toLowerCase().includes('@andrew.cmu.edu') || email.toLowerCase().includes('@cmu.edu')) {
-        console.log(`Skipping CMU student in quiz file: ${email}`);
-        continue;
-      }
-    }
+    let studentName = rowData[studentNameIndex] || '';
     
-    let studentName = '';
-    if (studentNameIndex !== -1 && rowData.length > studentNameIndex) {
-      studentName = rowData[studentNameIndex] || '';
-    }
-    
-    // Skip if both name and email are missing
-    if (!studentName && !email) {
-      console.log(`Skipping quiz record with missing student identifier`);
+    // Skip if student name is missing
+    if (!studentName) {
+      console.log(`Skipping quiz record with missing student name`);
       continue;
     }
+    
+    // Parse name into first and last (from "Last, First" format)
+    const { firstName, lastName } = parseName(studentName);
     
     // Process each quiz score for this student
     for (const quizItem of quizIndices) {
       if (rowData.length <= quizItem.index) continue;
       
       const scoreValue = rowData[quizItem.index] || '';
-      if (isNotCompletedQuiz(scoreValue)) continue;
+      if (isNotCompletedQuiz(scoreValue)) {
+        // For "Not finished" values, still record with null score for tracking
+        data.push({
+          studentName,
+          firstName,
+          lastName,
+          quizName: quizItem.quizName,
+          score: null,
+          completedAt: new Date().toISOString().split('T')[0] // Default to today
+        });
+        continue;
+      }
       
-      // Parse the score value to a number
+      // Parse the score value to a number (percentage)
       const score = parseScoreValue(scoreValue);
       
       data.push({
-        email,
         studentName,
+        firstName,
+        lastName,
         quizName: quizItem.quizName,
         score,
         completedAt: new Date().toISOString().split('T')[0] // Default to today

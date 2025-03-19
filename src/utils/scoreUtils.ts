@@ -49,6 +49,7 @@ export const isNotCompletedQuiz = (value: string | number): boolean => {
     const lowerValue = value.toLowerCase().trim();
     return (
       lowerValue.includes('not') || 
+      lowerValue.includes('not finished') ||
       lowerValue.includes('n/a') || 
       lowerValue.includes('incomplete') ||
       lowerValue === '' ||
@@ -58,7 +59,7 @@ export const isNotCompletedQuiz = (value: string | number): boolean => {
     );
   }
   return false;
-};
+}
 
 /**
  * Parses score values from various formats to a numerical percentage
@@ -83,8 +84,16 @@ export const parseScoreValue = (value: string | number): number => {
     return 0;
   }
   
-  // Remove percentage signs and keep only numbers and decimal points
-  const cleanValue = value.toString().replace(/%/g, '').trim();
+  // Check if value ends with '%' like '80.0%'
+  if (typeof value === 'string' && value.includes('%')) {
+    // Remove percentage sign and convert to number
+    const cleanValue = value.replace(/%/g, '').trim();
+    const numberValue = parseFloat(cleanValue);
+    return isNaN(numberValue) ? 0 : numberValue;
+  }
+  
+  // Remove any non-numeric characters except decimal points
+  const cleanValue = value.toString().replace(/[^\d.]/g, '').trim();
   
   // Parse the clean value as a number
   const numberValue = parseFloat(cleanValue);
@@ -100,4 +109,4 @@ export const parseScoreValue = (value: string | number): number => {
   }
   
   return numberValue;
-};
+}
