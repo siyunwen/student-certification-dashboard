@@ -123,6 +123,65 @@ export function parseName(name: string): { firstName: string; lastName: string }
   }
 }
 
+// Parse CSV data from file content - This was missing and caused a build error
+export function parseCSVData(filename: string, content: string): ParsedFile {
+  console.log(`Parsing file: ${filename}`);
+  
+  // Split content into lines and filter out empty lines
+  const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+  if (lines.length < 2) {
+    throw new Error(`File ${filename} has insufficient data (needs at least header and one data row)`);
+  }
+  
+  // Parse headers (first line)
+  const headers = parseCSVRow(lines[0]);
+  console.log(`Headers: ${headers.join(', ')}`);
+  
+  // Extract course name from filename
+  const courseName = extractCourseName(filename);
+  console.log(`Extracted course name: ${courseName}`);
+  
+  // Determine file type based on headers and content
+  const hasQuizScores = headers.some(h => 
+    h.toLowerCase().includes('quiz') || 
+    h.toLowerCase().includes('score') || 
+    h.toLowerCase().includes('grade')
+  );
+  
+  const fileType = hasQuizScores ? 'quiz' : 'student';
+  console.log(`Detected file type: ${fileType}`);
+  
+  // Parse file based on its type
+  if (fileType === 'student') {
+    return parseStudentFile(courseName, headers, lines);
+  } else {
+    return parseQuizFile(courseName, headers, lines);
+  }
+}
+
+// Helper function to parse CSV row (handles quotes)
+function parseCSVRow(row: string): string[] {
+  const result = [];
+  let inQuotes = false;
+  let currentValue = '';
+  
+  for (let i = 0; i < row.length; i++) {
+    const char = row[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(currentValue);
+      currentValue = '';
+    } else {
+      currentValue += char;
+    }
+  }
+  
+  result.push(currentValue);
+  return result;
+}
+
 // Parse a student data file
 function parseStudentFile(courseName: string, headers: string[], lines: string[]): ParsedFile {
   console.log('Parsing student file with headers:', headers);
@@ -296,27 +355,4 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     type: 'quiz',
     data
   };
-}
-
-// Helper function to parse CSV row (handles quotes)
-function parseCSVRow(row: string): string[] {
-  const result = [];
-  let inQuotes = false;
-  let currentValue = '';
-  
-  for (let i = 0; i < row.length; i++) {
-    const char = row[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(currentValue);
-      currentValue = '';
-    } else {
-      currentValue += char;
-    }
-  }
-  
-  result.push(currentValue);
-  return result;
 }
