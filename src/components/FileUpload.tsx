@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -31,62 +30,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
 
   const handleDragLeave = () => {
     setIsDragging(false);
-  };
-
-  const processUploadedFiles = (newFiles: File[]) => {
-    if (!newFiles.length) return;
-    
-    const validFiles = newFiles.filter(file => {
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      return extension === 'csv' || extension === 'txt' || extension === 'xlsx' || extension === 'xls';
-    });
-    
-    if (validFiles.length !== newFiles.length) {
-      toast.error('Some files were skipped. Please upload only CSV, TXT, XLSX or XLS files');
-    }
-    
-    if (validFiles.length === 0) return;
-    
-    setFiles(prev => [...prev, ...validFiles]);
-    setIsLoading(true);
-    
-    const filePromises = validFiles.map(file => {
-      return new Promise<ParsedFile>((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = (event) => {
-          try {
-            const content = event.target?.result as string;
-            const parsedFile = parseCSVData(file.name, content);
-            console.log(`File '${file.name}' parsed as course: '${parsedFile.courseName}'`);
-            resolve(parsedFile);
-          } catch (error) {
-            reject(error);
-          }
-        };
-        
-        reader.onerror = () => {
-          reject(new Error(`Failed to read file: ${file.name}`));
-        };
-        
-        reader.readAsText(file);
-      });
-    });
-    
-    Promise.all(filePromises)
-      .then(results => {
-        const newParsedFiles = [...parsedFiles, ...results];
-        setParsedFiles(newParsedFiles);
-        onFilesLoaded(newParsedFiles);
-        toast.success(`${validFiles.length} file(s) uploaded successfully`);
-      })
-      .catch(error => {
-        toast.error('Failed to process one or more files');
-        console.error('Error processing files:', error);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -130,6 +73,72 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     }
   };
 
+  const processUploadedFiles = (newFiles: File[]) => {
+    if (!newFiles.length) return;
+    
+    const validFiles = newFiles.filter(file => {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      return extension === 'csv' || extension === 'txt' || extension === 'xlsx' || extension === 'xls';
+    });
+    
+    if (validFiles.length !== newFiles.length) {
+      toast.error('Some files were skipped. Please upload only CSV, TXT, XLSX or XLS files');
+    }
+    
+    if (validFiles.length === 0) return;
+    
+    setFiles(prev => [...prev, ...validFiles]);
+    setIsLoading(true);
+    
+    const filePromises = validFiles.map(file => {
+      return new Promise<ParsedFile>((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          try {
+            const content = event.target?.result as string;
+            const parsedFile = parseCSVData(file.name, content);
+            console.log(`File '${file.name}' parsed as course: '${parsedFile.courseName}'`);
+            resolve(parsedFile);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        
+        reader.onerror = () => {
+          reject(new Error(`Failed to read file: ${file.name}`));
+        };
+        
+        reader.readAsText(file);
+      });
+    });
+    
+    Promise.all(filePromises)
+      .then(async results => {
+        const newParsedFiles = [...parsedFiles, ...results];
+        setParsedFiles(newParsedFiles);
+        
+        setIsProcessing(true);
+        try {
+          const result = await processFiles(newParsedFiles);
+          onFilesLoaded(result.parsedFiles);
+          toast.success(`${validFiles.length} file(s) processed successfully`);
+        } catch (error) {
+          console.error('Error processing files:', error);
+          toast.error('Failed to process data');
+        } finally {
+          setIsProcessing(false);
+        }
+      })
+      .catch(error => {
+        toast.error('Failed to process one or more files');
+        console.error('Error processing files:', error);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
   const getCourseCompleteness = () => {
     const courseStatus: Record<string, { hasStudent: boolean; hasQuiz: boolean }> = {};
     
@@ -148,31 +157,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     });
     
     return courseStatus;
-  };
-
-  const processFilesLocally = async () => {
-    const courseStatus = getCourseCompleteness();
-    const completeCoursesCount = Object.values(courseStatus).filter(
-      status => status.hasStudent && status.hasQuiz
-    ).length;
-    
-    if (completeCoursesCount === 0) {
-      toast.warning('Please upload both student and quiz files for at least one course');
-      return;
-    }
-    
-    setIsProcessing(true);
-    
-    try {
-      const result = await processFiles(parsedFiles);
-      toast.success('Data successfully processed!');
-      onFilesLoaded(result.parsedFiles);
-    } catch (error) {
-      console.error('Error processing files:', error);
-      toast.error('Failed to process data');
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   const courseStatus = getCourseCompleteness();
@@ -318,25 +302,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
               <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">
                 Upload both student and quiz files for at least one course to process data
               </p>
-            )}
-            
-            {completeCoursesCount > 0 && (
-              <div className="mt-4">
-                <Button 
-                  onClick={processFilesLocally}
-                  className="w-full"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
-                      Processing Data...
-                    </>
-                  ) : (
-                    <>Process Data</>
-                  )}
-                </Button>
-              </div>
             )}
           </div>
         </div>

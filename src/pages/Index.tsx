@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import DashboardHeader from '@/components/DashboardHeader';
 import DashboardCard from '@/components/DashboardCard';
@@ -18,7 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { fetchStudents, saveCertificationSettings, fetchCertificationSettings, clearStoredData } from '@/services/localStorageService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const COLORS = ['#2563eb', '#e5e7eb'];
 
@@ -194,13 +192,6 @@ const Index = () => {
       </div>
       
       <main className="page-container">
-        <Alert className="my-4 bg-slate-50 border-slate-200">
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            This is a frontend-only application. All data is stored in your browser's local storage and will persist between visits.
-          </AlertDescription>
-        </Alert>
-
         {(isLoadingStudents || isLoadingSettings) && (
           <div className="my-8 flex justify-center">
             <div className="flex items-center space-x-2">
@@ -485,3 +476,4 @@ const Index = () => {
 };
 
 export default Index;
+
