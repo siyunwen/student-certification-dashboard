@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -34,7 +35,7 @@ export function calculateCertificationStats(
   const passRate = totalStudents > 0 ? (eligibleStudents / totalStudents) * 100 : 0;
   
   // Calculate course-specific average scores
-  const coursePrefixes = detectCoursePrefixes(filteredStudents);
+  const coursePrefixes = detectCoursePrefixesFromStudents(filteredStudents);
   const courseAverages = coursePrefixes.map(prefix => {
     const courseStudents = filteredStudents.filter(s => s.courseName && s.courseName.startsWith(prefix));
     const courseTotal = courseStudents.reduce((sum, s) => sum + (s.score || 0), 0);
@@ -128,9 +129,20 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 }
 
-// Helper function to detect course prefixes for merging
+// Helper function to detect course prefixes from student objects
+function detectCoursePrefixesFromStudents(students: Student[]): string[] {
+  const courseNames = students.map(student => student.courseName).filter(Boolean) as string[];
+  return detectCoursePrefixesFromNames(courseNames);
+}
+
+// Helper function to detect course prefixes for merging from ParsedFile objects
 function detectCoursePrefixes(files: ParsedFile[]): string[] {
-  const courseNames = files.map(file => file.courseName);
+  const courseNames = files.map(file => file.courseName).filter(Boolean) as string[];
+  return detectCoursePrefixesFromNames(courseNames);
+}
+
+// Common function to detect course prefixes from an array of course names
+function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   const prefixMap: Record<string, number> = {};
   
   // Detect potential prefixes by looking for patterns like "prefix_number"
