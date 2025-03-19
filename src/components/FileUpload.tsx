@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -182,19 +181,13 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
 
   return (
     <div className={cn('', className)}>
-      <Alert className="mb-4 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
-        <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+      <Alert className="mb-4 bg-slate-50 border-slate-200 dark:bg-slate-900/30 dark:border-slate-800">
+        <Info className="h-4 w-4 text-slate-600 dark:text-slate-400" />
         <AlertDescription className="text-sm">
-          <p className="font-medium text-amber-800 dark:text-amber-300">File Naming Format</p>
-          <p className="text-amber-700 dark:text-amber-400 mt-1">
-            For best results, name your files using this format:
-          </p>
-          <ul className="list-disc pl-5 mt-1 text-xs text-amber-700 dark:text-amber-400 space-y-1">
-            <li><span className="font-medium">Student data files:</span> <code className="bg-amber-100 dark:bg-amber-900/30 px-1 rounded">[coursename]_students.csv</code> (e.g., <code className="bg-amber-100 dark:bg-amber-900/30 px-1 rounded">aifi303_students.csv</code>)</li>
-            <li><span className="font-medium">Quiz data files:</span> <code className="bg-amber-100 dark:bg-amber-900/30 px-1 rounded">[coursename]_quiz_scores.csv</code> (e.g., <code className="bg-amber-100 dark:bg-amber-900/30 px-1 rounded">aifi303_quiz_scores.csv</code>)</li>
-          </ul>
-          <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-            The system will attempt to match student and quiz files for the same course based on the course name.
+          <p className="font-medium">File Format</p>
+          <p className="text-xs mt-1">
+            Name files: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">[coursename]_students.csv</code> for student data, 
+            <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded ml-1">[coursename]_quiz_scores.csv</code> for quiz data
           </p>
         </AlertDescription>
       </Alert>
