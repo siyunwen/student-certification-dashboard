@@ -8,8 +8,16 @@ export function calculateCertificationStats(
 ): CertificationStats {
   // Filter out students based on date if needed
   const filteredStudents = settings.dateSince
-    ? students.filter(student => new Date(student.lastActivityDate) >= new Date(settings.dateSince))
+    ? students.filter(student => {
+        if (!student.lastActivityDate) return false;
+        const activityDate = new Date(student.lastActivityDate);
+        const filterDate = new Date(settings.dateSince);
+        console.log(`Comparing dates for ${student.firstName} ${student.lastName}: Activity date ${activityDate.toISOString().split('T')[0]} >= Filter date ${filterDate.toISOString().split('T')[0]}`);
+        return activityDate >= filterDate;
+      })
     : students;
+
+  console.log(`Date filtering: Total students ${students.length}, filtered to ${filteredStudents.length}`);
 
   const totalStudents = filteredStudents.length;
   const eligibleStudents = getEligibleStudents(filteredStudents, settings).length;
@@ -33,12 +41,17 @@ export function getEligibleStudents(
   settings: CertificationSettings
 ): Student[] {
   // Filter by date if needed
-  const filteredStudents = settings.dateSince
-    ? students.filter(student => new Date(student.lastActivityDate) >= new Date(settings.dateSince))
+  const filteredByDate = settings.dateSince
+    ? students.filter(student => {
+        if (!student.lastActivityDate) return false;
+        const activityDate = new Date(student.lastActivityDate);
+        const filterDate = new Date(settings.dateSince);
+        return activityDate >= filterDate;
+      })
     : students;
   
   // Filter by passing threshold
-  return filteredStudents.filter(student => 
+  return filteredByDate.filter(student => 
     student.score >= settings.passThreshold && student.courseCompleted
   );
 }

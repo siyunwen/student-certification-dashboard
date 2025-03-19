@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { CertificationSettings as SettingsType } from '@/types/student';
@@ -43,6 +43,7 @@ const CertificationSettings = ({
 
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
+      // Format as ISO string date part for consistent comparisons
       const formattedDate = format(date, 'yyyy-MM-dd');
       console.log("Setting date filter to:", formattedDate);
       
@@ -118,6 +119,7 @@ const CertificationSettings = ({
               selected={settings.dateSince ? new Date(settings.dateSince) : undefined}
               onSelect={handleDateChange}
               initialFocus
+              disabled={(date) => date > new Date()} // Prevent selecting future dates
               className="pointer-events-auto"
             />
           </PopoverContent>
