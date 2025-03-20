@@ -9,6 +9,7 @@ interface DashboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   animate?: boolean;
+  fullHeight?: boolean; // Added prop for full height control
 }
 
 const DashboardCard = ({
@@ -18,6 +19,7 @@ const DashboardCard = ({
   children,
   className,
   animate = true,
+  fullHeight = false, // Default to false
   ...props
 }: DashboardCardProps) => {
   return (
@@ -25,6 +27,7 @@ const DashboardCard = ({
       className={cn(
         'dashboard-card card-transition', 
         animate ? 'animate-scale-in' : '',
+        fullHeight ? 'h-full' : '', // Apply full height when requested
         className
       )}
       {...props}

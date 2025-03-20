@@ -365,7 +365,7 @@ const Index = () => {
                 <section className="section mt-8 animate-fade-in">
                   <h2 className="section-title">Certification Distribution</h2>
                   <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-                    <DashboardCard className="md:col-span-1 h-[300px] flex flex-col justify-center">
+                    <DashboardCard className="md:col-span-1" fullHeight={true}>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -414,7 +414,7 @@ const Index = () => {
                       </div>
                     </DashboardCard>
                     
-                    <DashboardCard className="md:col-span-2">
+                    <DashboardCard className="md:col-span-2" fullHeight={true}>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h3 className="text-lg font-medium text-slate-900 dark:text-white">Certification Summary</h3>
