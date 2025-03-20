@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, ParsedFile } from '@/types/student';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeScore, parseScoreValue } from '@/utils/scoreUtils';
@@ -61,7 +60,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
     // Group files by course with support for course merging
     const courseMap: Record<string, { studentFile?: ParsedFile, quizFile?: ParsedFile }> = {};
     
-    // First detect course prefixes for merging (e.g., "aifi_" in "aifi_301", "aifi_302")
+    // First detect course prefixes for merging
     const coursePrefixes = detectCoursePrefixes(parsedFiles);
     console.log('Detected course prefixes for merging:', coursePrefixes);
     
@@ -297,21 +296,18 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
 
 // Helper functions for course prefix detection and file merging
 
-// Detect course prefixes for potential merging (e.g., "aifi_" from "aifi_301", "aifi_302")
+// Detect course prefixes for potential merging (e.g., "aifi" from "aifi_301", "aifi_302")
 function detectCoursePrefixes(files: ParsedFile[]): string[] {
   const courseNames = files.map(file => file.courseName);
   const prefixMap: Record<string, number> = {};
   
-  // Detect potential prefixes by looking for patterns like "prefix_number"
+  // Updated to consider the first 4 characters
   courseNames.forEach(name => {
-    if (!name) return;
+    if (!name || name.length < 4) return;
     
-    // Look for patterns like "aifi_301" where "aifi_" is the prefix
-    const match = name.match(/^([a-zA-Z]+_)\d+/);
-    if (match && match[1]) {
-      const prefix = match[1]; // e.g., "aifi_"
-      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
-    }
+    // Get first 4 characters as the prefix
+    const prefix = name.substring(0, 4);
+    prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
   });
   
   // Only consider prefixes that appear more than once

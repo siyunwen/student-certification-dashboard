@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -144,7 +145,6 @@ function detectCoursePrefixes(files: ParsedFile[]): string[] {
 function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   const prefixMap: Record<string, number> = {};
   
-  // Detect potential prefixes by looking for first 4 characters
   // Updated to consider just the first 4 characters (e.g., "aifi" from "aifi_301")
   courseNames.forEach(name => {
     if (!name || name.length < 4) return;

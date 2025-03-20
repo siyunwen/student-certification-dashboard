@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -91,7 +90,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
       return;
     }
     
-    // First set the files state to show progress
     setFiles(prev => [...prev, ...validFiles]);
     setIsLoading(true);
     
@@ -162,20 +160,15 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
   };
 
   const getCourseCompleteness = () => {
-    // Detect course prefixes for potential merging first
     const detectCoursePrefixes = (files: ParsedFile[]): string[] => {
       const courseNames = files.map(file => file.courseName);
       const prefixMap: Record<string, number> = {};
       
       courseNames.forEach(name => {
-        if (!name) return;
+        if (!name || name.length < 4) return;
         
-        // Look for patterns like "aifi_301" where "aifi_" is the prefix
-        const match = name.match(/^([a-zA-Z]+_)\d+/);
-        if (match && match[1]) {
-          const prefix = match[1]; // e.g., "aifi_"
-          prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
-        }
+        const prefix = name.substring(0, 4);
+        prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
       });
       
       return Object.entries(prefixMap)
@@ -185,7 +178,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
     
     const coursePrefixes = detectCoursePrefixes(parsedFiles);
     
-    // Helper to check if a course name should be merged based on prefix
     const getCoursePrefixForFile = (courseName: string, prefixes: string[]): string | null => {
       for (const prefix of prefixes) {
         if (courseName.startsWith(prefix)) {
@@ -206,7 +198,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
       if (!file.courseName) return;
       
       const courseName = file.courseName.trim();
-      // Check if this course should be merged based on prefix
       const coursePrefix = getCoursePrefixForFile(courseName, coursePrefixes);
       const finalCourseName = coursePrefix || courseName;
       
@@ -217,11 +208,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
           originalCourses: [],
           isMerged: coursePrefix !== null
         };
-      }
-      
-      // Add original course name if it's a merged course and not already added
-      if (coursePrefix && !courseStatus[finalCourseName].originalCourses.includes(courseName)) {
-        courseStatus[finalCourseName].originalCourses.push(courseName);
       }
       
       if (file.type === 'student') {
@@ -396,7 +382,6 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
               Courses with complete data: {completeCoursesCount} of {Object.keys(courseStatus).length}
             </p>
             
-            {/* Show merged courses if any */}
             {Object.entries(courseStatus).some(([_, info]) => info.isMerged) && (
               <div className="mt-2 p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50 text-xs">
                 <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Merged Course Groups:</p>
