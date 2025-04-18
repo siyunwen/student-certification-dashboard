@@ -124,3 +124,41 @@ export const parseScoreValue = (value: string | number): number => {
   
   return numberValue;
 }
+
+/**
+ * Checks if a student has completed all quizzes for their course
+ * @param student Student object with quiz scores
+ * @param requiredQuizCount Expected number of quizzes for the course
+ * @returns Boolean indicating if all quizzes are completed
+ */
+export const hasCompletedAllQuizzes = (student: { quizScores?: { quizName: string; score: number | null }[] }, requiredQuizCount: number): boolean => {
+  // If no quiz scores, student hasn't completed any quizzes
+  if (!student.quizScores || student.quizScores.length === 0) {
+    return false;
+  }
+  
+  // Check if the student has completed the required number of quizzes
+  const completedQuizzes = student.quizScores.filter(quiz => quiz.score !== null);
+  return completedQuizzes.length >= requiredQuizCount;
+};
+
+/**
+ * Gets the count of required quizzes for a course from quiz file data
+ * @param quizData Quiz file data containing quiz headers
+ * @returns Number of quizzes required for completion
+ */
+export const getRequiredQuizCount = (quizData: any[]): number => {
+  // If no quiz data available, return 0
+  if (!quizData || quizData.length === 0) {
+    return 0;
+  }
+  
+  // Get the first record which should have quiz names as properties
+  const firstRecord = quizData[0];
+  
+  // Count properties that represent quizzes (exclude student info fields)
+  const excludedFields = ['firstName', 'lastName', 'email', 'quizName', 'score', 'completedAt'];
+  
+  // Count non-standard fields as quiz names
+  return Object.keys(firstRecord).filter(key => !excludedFields.includes(key)).length;
+};

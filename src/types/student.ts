@@ -12,6 +12,8 @@ export interface Student {
   courseName?: string;
   courseCompleted: boolean;
   allCourses?: string[]; // Added to track all courses a student is enrolled in
+  allQuizzesCompleted?: boolean; // Added to track if student has completed all required quizzes
+  requiredQuizCount?: number; // Added to store how many quizzes are required for the course
 }
 
 export interface QuizScore {

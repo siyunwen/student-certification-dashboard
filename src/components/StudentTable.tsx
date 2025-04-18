@@ -53,6 +53,8 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       email: s.email,
       rawScore: s.score,
       courseCompleted: s.courseCompleted,
+      allQuizzesCompleted: s.allQuizzesCompleted,
+      requiredQuizCount: s.requiredQuizCount,
       quizzes: s.quizScores?.length || 0,
       id: s.id,
       courseName: s.courseName,
@@ -76,6 +78,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       email: s.email,
       normalizedScore: s.score,
       courseCompleted: s.courseCompleted,
+      allQuizzesCompleted: s.allQuizzesCompleted,
       quizzes: s.quizScores?.length || 0,
       id: s.id,
       courseName: s.courseName
@@ -166,7 +169,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   
   return (
     <div className={className}>
-      {/* Search and filter section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <Input
@@ -204,7 +206,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
         </div>
       </div>
       
-      {/* Table section */}
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
@@ -261,10 +262,13 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
             ) : (
               <>
                 {paginatedStudents.map((student) => {
-                  const isPassing = student.score >= passThreshold && student.courseCompleted;
+                  const hasPassingScore = student.score >= passThreshold;
+                  const hasAllQuizzesRequired = student.allQuizzesCompleted === true;
+                  const isPassing = hasPassingScore && student.courseCompleted && hasAllQuizzesRequired;
+                  
                   const isExpanded = expandedStudents.includes(student.id);
                   
-                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, quizCount=${student.quizScores?.length}`);
+                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, allQuizzesCompleted=${hasAllQuizzesRequired}, quizCount=${student.quizScores?.length}/${student.requiredQuizCount}`);
                   
                   return (
                     <React.Fragment key={student.id}>
@@ -313,7 +317,11 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                             ) : (
                               <>
                                 <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
-                                <span className="text-slate-500 text-sm">Not eligible</span>
+                                <span className="text-slate-500 text-sm">
+                                  {!hasPassingScore ? "Score below threshold" : 
+                                   !hasAllQuizzesRequired ? "Missing quizzes" : 
+                                   "Not eligible"}
+                                </span>
                               </>
                             )}
                           </div>
@@ -332,23 +340,39 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                         <TableRow className="bg-slate-50 dark:bg-slate-800/30">
                           <TableCell colSpan={7} className="p-0">
                             <div className="p-4">
-                              <h4 className="text-sm font-medium mb-2">Quiz Scores</h4>
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="text-sm font-medium">Quiz Scores</h4>
+                                {student.requiredQuizCount && (
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                      student.allQuizzesCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                      'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                                    }`}>
+                                    {student.quizScores?.filter(q => q.score !== null).length || 0}/{student.requiredQuizCount} quizzes completed
+                                  </span>
+                                )}
+                              </div>
+                              
                               {student.quizScores && student.quizScores.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                                   {student.quizScores.map((quiz, index) => (
                                     <div 
                                       key={index} 
-                                      className="bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"
+                                      className={`p-2 rounded border flex justify-between items-center ${
+                                        quiz.score === null ? 
+                                          'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700' : 
+                                          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                      }`}
                                     >
                                       <span className="text-sm truncate mr-2" title={quiz.quizName}>
                                         {quiz.quizName}
                                       </span>
                                       <span 
                                         className={`text-sm font-medium ${
+                                          quiz.score === null ? 'text-slate-500 dark:text-slate-400' :
                                           quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
                                         }`}
                                       >
-                                        {quiz.score?.toFixed(1)}%
+                                        {quiz.score === null ? 'Not completed' : `${quiz.score?.toFixed(1)}%`}
                                       </span>
                                     </div>
                                   ))}
@@ -369,7 +393,6 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
         </Table>
       </div>
       
-      {/* Pagination section */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-slate-500">

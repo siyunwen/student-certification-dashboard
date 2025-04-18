@@ -1,5 +1,6 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
-import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
+import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 
 // Calculate certification statistics for students
 export function calculateCertificationStats(
@@ -77,7 +78,7 @@ export function getEligibleStudents(
       })
     : students;
   
-  // Filter by passing threshold
+  // Filter by passing threshold and course completion status
   return filteredByDate.filter(student => 
     student.score >= settings.passThreshold && student.courseCompleted
   );
@@ -455,3 +456,4 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     data
   };
 }
+
