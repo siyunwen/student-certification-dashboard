@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 
@@ -56,7 +57,7 @@ export function calculateCertificationStats(
   };
 }
 
-// Get students eligible for certification - updated for more robust course completion check
+// Get students eligible for certification - updated to be less strict
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
@@ -97,30 +98,38 @@ export function getEligibleStudents(
     // If student only has one course record
     if (studentRecords.length === 1) {
       const student = studentRecords[0];
-      if (student.score >= settings.passThreshold && 
-          student.courseCompleted && 
-          student.allQuizzesCompleted === true) {
+      // Less strict: If student has completed the course and has a passing score
+      if (student.score >= settings.passThreshold && student.courseCompleted) {
         eligibleStudents.push(student);
       }
       return;
     }
     
-    // If student has multiple course records, they must pass all courses they're enrolled in
-    const allCoursesCompleted = studentRecords.every(record => 
-      record.courseCompleted && record.allQuizzesCompleted === true);
+    // REVISED: For multiple courses, student should pass the courses they're enrolled in
+    // Get list of courses student is enrolled in
+    const enrolledCourses = studentRecords.map(r => r.courseName || '').filter(Boolean);
     
-    const averageScore = studentRecords.reduce((sum, record) => sum + record.score, 0) / studentRecords.length;
+    // Check if student has passing scores in courses they're enrolled in
+    const passingRecords = studentRecords.filter(record => 
+      record.score >= settings.passThreshold && record.courseCompleted);
     
-    if (allCoursesCompleted && averageScore >= settings.passThreshold) {
-      // Use the first record but attach the combined course info
-      const representativeRecord = {...studentRecords[0]};
-      representativeRecord.score = averageScore;
-      representativeRecord.allCourses = studentRecords.map(r => r.courseName || '').filter(Boolean);
-      eligibleStudents.push(representativeRecord);
+    // If student has passing scores in at least one course
+    if (passingRecords.length > 0) {
+      // Calculate average score across all courses
+      const averageScore = studentRecords.reduce((sum, record) => sum + record.score, 0) / studentRecords.length;
+      
+      // If average score is above threshold, student is eligible
+      if (averageScore >= settings.passThreshold) {
+        // Use the first record but attach the combined course info
+        const representativeRecord = {...studentRecords[0]};
+        representativeRecord.score = averageScore;
+        representativeRecord.allCourses = enrolledCourses;
+        eligibleStudents.push(representativeRecord);
+      }
     }
   });
   
-  console.log(`Eligible students after robust course completion check: ${eligibleStudents.length} of ${filteredByDate.length}`);
+  console.log(`Eligible students after adjusted course completion check: ${eligibleStudents.length} of ${filteredByDate.length}`);
   return eligibleStudents;
 }
 

@@ -265,15 +265,14 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
               <>
                 {paginatedStudents.map((student) => {
                   const hasPassingScore = student.score >= passThreshold;
-                  const hasAllQuizzesRequired = student.allQuizzesCompleted === true;
                   
-                  const hasMultipleCourses = student.allCourses && student.allCourses.length > 1;
-                  
-                  const isPassing = hasPassingScore && student.courseCompleted && hasAllQuizzesRequired;
+                  const isPassing = hasPassingScore && student.courseCompleted;
                   
                   const isExpanded = expandedStudents.includes(student.id);
                   
-                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, allQuizzesCompleted=${hasAllQuizzesRequired}, quizCount=${student.quizScores?.length}/${student.requiredQuizCount}, courses=${student.allCourses?.join(', ') || student.courseName}`);
+                  const hasMultipleCourses = student.allCourses && student.allCourses.length > 1;
+                  
+                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, courseCompleted=${student.courseCompleted}, courses=${student.allCourses?.join(', ') || student.courseName}`);
                   
                   return (
                     <React.Fragment key={student.id}>
@@ -324,7 +323,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                                 <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
                                 <span className="text-slate-500 text-sm">
                                   {!hasPassingScore ? "Score below threshold" : 
-                                   !hasAllQuizzesRequired ? "Missing quizzes" : 
+                                   !student.courseCompleted ? "Course not completed" : 
                                    "Not eligible"}
                                 </span>
                               </>
