@@ -10,6 +10,7 @@ interface DashboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
   animate?: boolean;
   fullHeight?: boolean; // Added prop for full height control
+  emptyState?: React.ReactNode; // Add support for empty state content
 }
 
 const DashboardCard = ({
@@ -20,21 +21,24 @@ const DashboardCard = ({
   className,
   animate = true,
   fullHeight = false, // Default to false
+  emptyState,
   ...props
 }: DashboardCardProps) => {
   return (
     <div 
       className={cn(
-        'dashboard-card card-transition', 
+        'dashboard-card rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 shadow-sm transition-all',
         animate ? 'animate-scale-in' : '',
-        fullHeight ? 'h-full' : '', // Apply full height when requested
+        fullHeight ? 'h-full flex flex-col' : '', // Apply full height and flex column when requested
         className
       )}
       {...props}
     >
       {chip && (
         <div className="mb-3">
-          <span className="chip">{chip}</span>
+          <span className="chip bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-xs font-medium rounded px-2 py-1">
+            {chip}
+          </span>
         </div>
       )}
       
@@ -50,8 +54,8 @@ const DashboardCard = ({
         </p>
       )}
       
-      <div className="space-y-4">
-        {children}
+      <div className={cn("space-y-4", fullHeight && "flex-grow")}>
+        {children || emptyState}
       </div>
     </div>
   );
