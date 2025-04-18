@@ -138,7 +138,7 @@ export const hasCompletedAllQuizzes = (student: { quizScores?: { quizName: strin
   }
   
   // Check if the student has completed the required number of quizzes
-  const completedQuizzes = student.quizScores.filter(quiz => quiz.score !== null);
+  const completedQuizzes = student.quizScores.filter(quiz => quiz.score !== null && quiz.score > 0);
   return completedQuizzes.length >= requiredQuizCount;
 };
 
@@ -157,7 +157,8 @@ export const getRequiredQuizCount = (quizData: any[]): number => {
   const firstRecord = quizData[0];
   
   // Count properties that represent quizzes (exclude student info fields)
-  const excludedFields = ['firstName', 'lastName', 'email', 'quizName', 'score', 'completedAt'];
+  const excludedFields = ['firstName', 'lastName', 'email', 'quizName', 'score', 'completedAt', 
+                          'student_family_name', 'student_given_name', 'student_email', 'student_id', 'student_lms_id'];
   
   // Count non-standard fields as quiz names
   return Object.keys(firstRecord).filter(key => !excludedFields.includes(key)).length;

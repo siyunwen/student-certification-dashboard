@@ -59,7 +59,8 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       id: s.id,
       courseName: s.courseName,
       firstName: s.firstName,
-      lastName: s.lastName
+      lastName: s.lastName,
+      allCourses: s.allCourses,
     })));
     
     const normalized = students.map(student => {
@@ -81,7 +82,8 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       allQuizzesCompleted: s.allQuizzesCompleted,
       quizzes: s.quizScores?.length || 0,
       id: s.id,
-      courseName: s.courseName
+      courseName: s.courseName,
+      allCourses: s.allCourses,
     })));
     
     setFormattedStudents(normalized);
@@ -264,11 +266,14 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                 {paginatedStudents.map((student) => {
                   const hasPassingScore = student.score >= passThreshold;
                   const hasAllQuizzesRequired = student.allQuizzesCompleted === true;
+                  
+                  const hasMultipleCourses = student.allCourses && student.allCourses.length > 1;
+                  
                   const isPassing = hasPassingScore && student.courseCompleted && hasAllQuizzesRequired;
                   
                   const isExpanded = expandedStudents.includes(student.id);
                   
-                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, allQuizzesCompleted=${hasAllQuizzesRequired}, quizCount=${student.quizScores?.length}/${student.requiredQuizCount}`);
+                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, allQuizzesCompleted=${hasAllQuizzesRequired}, quizCount=${student.quizScores?.length}/${student.requiredQuizCount}, courses=${student.allCourses?.join(', ') || student.courseName}`);
                   
                   return (
                     <React.Fragment key={student.id}>
@@ -327,9 +332,24 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <Badge variant="outline" className="font-normal">
-                            {student.courseName || 'Unknown'}
-                          </Badge>
+                          {hasMultipleCourses ? (
+                            <div className="flex flex-wrap gap-1">
+                              {student.allCourses?.slice(0, 2).map((course, i) => (
+                                <Badge key={i} variant="outline" className="font-normal">
+                                  {course}
+                                </Badge>
+                              ))}
+                              {student.allCourses && student.allCourses.length > 2 && (
+                                <Badge variant="outline" className="font-normal">
+                                  +{student.allCourses.length - 2} more
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <Badge variant="outline" className="font-normal">
+                              {student.courseName || 'Unknown'}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
                           {student.lastActivityDate ? format(new Date(student.lastActivityDate), 'MMM d, yyyy') : 'N/A'}
@@ -340,6 +360,19 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                         <TableRow className="bg-slate-50 dark:bg-slate-800/30">
                           <TableCell colSpan={7} className="p-0">
                             <div className="p-4">
+                              {hasMultipleCourses && (
+                                <div className="mb-4">
+                                  <h4 className="text-sm font-medium mb-2">Enrolled Courses</h4>
+                                  <div className="flex flex-wrap gap-1">
+                                    {student.allCourses?.map((course, i) => (
+                                      <Badge key={i} variant="secondary" className="font-normal">
+                                        {course}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
                               <div className="flex justify-between items-start mb-2">
                                 <h4 className="text-sm font-medium">Quiz Scores</h4>
                                 {student.requiredQuizCount && (

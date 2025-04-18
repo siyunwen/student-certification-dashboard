@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 
@@ -57,7 +56,7 @@ export function calculateCertificationStats(
   };
 }
 
-// Get students eligible for certification
+// Get students eligible for certification - updated for more robust course completion check
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
@@ -78,10 +77,51 @@ export function getEligibleStudents(
       })
     : students;
   
-  // Filter by passing threshold and course completion status
-  return filteredByDate.filter(student => 
-    student.score >= settings.passThreshold && student.courseCompleted
-  );
+  // Group students by email to check across all their courses
+  const studentsByEmail = filteredByDate.reduce((groups: Record<string, Student[]>, student) => {
+    if (!student.email) return groups;
+    
+    const email = student.email.toLowerCase().trim();
+    if (!groups[email]) {
+      groups[email] = [];
+    }
+    
+    groups[email].push(student);
+    return groups;
+  }, {});
+  
+  // For each unique student (by email), check if they're eligible across all their courses
+  const eligibleStudents: Student[] = [];
+  
+  Object.values(studentsByEmail).forEach(studentRecords => {
+    // If student only has one course record
+    if (studentRecords.length === 1) {
+      const student = studentRecords[0];
+      if (student.score >= settings.passThreshold && 
+          student.courseCompleted && 
+          student.allQuizzesCompleted === true) {
+        eligibleStudents.push(student);
+      }
+      return;
+    }
+    
+    // If student has multiple course records, they must pass all courses they're enrolled in
+    const allCoursesCompleted = studentRecords.every(record => 
+      record.courseCompleted && record.allQuizzesCompleted === true);
+    
+    const averageScore = studentRecords.reduce((sum, record) => sum + record.score, 0) / studentRecords.length;
+    
+    if (allCoursesCompleted && averageScore >= settings.passThreshold) {
+      // Use the first record but attach the combined course info
+      const representativeRecord = {...studentRecords[0]};
+      representativeRecord.score = averageScore;
+      representativeRecord.allCourses = studentRecords.map(r => r.courseName || '').filter(Boolean);
+      eligibleStudents.push(representativeRecord);
+    }
+  });
+  
+  console.log(`Eligible students after robust course completion check: ${eligibleStudents.length} of ${filteredByDate.length}`);
+  return eligibleStudents;
 }
 
 // Group files by course and check if each course has both student and quiz files
@@ -456,4 +496,3 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     data
   };
 }
-
