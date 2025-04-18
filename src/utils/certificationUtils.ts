@@ -369,41 +369,45 @@ function parseStudentFile(courseName: string, headers: string[], lines: string[]
 
 // Parse a quiz data file with specific column format
 function parseQuizFile(courseName: string, headers: string[], lines: string[]): ParsedFile {
-  // Find the student name column (expected format: "Last, First")
-  const studentNameIndex = headers.findIndex(h => 
-    h.toLowerCase() === 'student' || 
-    h.toLowerCase().includes('student')
-  );
+  // Find the key column indices based on the new format
+  const familyNameIndex = headers.findIndex(h => h === 'student_family_name');
+  const givenNameIndex = headers.findIndex(h => h === 'student_given_name');
+  const emailIndex = headers.findIndex(h => h === 'student_email');
   
-  if (studentNameIndex === -1) {
-    throw new Error(`Quiz file is missing required student column`);
+  if (familyNameIndex === -1 || givenNameIndex === -1) {
+    throw new Error('Quiz file is missing required student name columns');
   }
   
-  // Find all quiz columns (all columns except student name are quiz scores)
-  const quizIndices = headers.map((header, index) => {
-    if (index !== studentNameIndex && header.trim() !== '') {
-      return { index, quizName: header };
-    }
-    return null;
-  }).filter(item => item !== null) as { index: number; quizName: string }[];
+  // Find all quiz columns (all columns after the student info columns are quiz scores)
+  const quizIndices = headers
+    .map((header, index) => {
+      // Skip the student info columns
+      if (index <= Math.max(familyNameIndex, givenNameIndex, emailIndex)) {
+        return null;
+      }
+      if (header.trim() !== '') {
+        return { index, quizName: header };
+      }
+      return null;
+    })
+    .filter(item => item !== null) as { index: number; quizName: string }[];
   
   const data = [];
   
   // Process each line (skipping header)
   for (let i = 1; i < lines.length; i++) {
     const rowData = parseCSVRow(lines[i]);
-    if (rowData.length <= studentNameIndex) continue;
+    if (rowData.length <= Math.max(familyNameIndex, givenNameIndex)) continue;
     
-    let studentName = rowData[studentNameIndex] || '';
+    const lastName = rowData[familyNameIndex]?.trim() || '';
+    const firstName = rowData[givenNameIndex]?.trim() || '';
+    const email = emailIndex !== -1 ? rowData[emailIndex]?.trim() : '';
     
-    // Skip if student name is missing
-    if (!studentName) {
+    // Skip if both name parts are missing
+    if (!lastName && !firstName) {
       console.log(`Skipping quiz record with missing student name`);
       continue;
     }
-    
-    // Parse name into first and last (from "Last, First" format)
-    const { firstName, lastName } = parseName(studentName);
     
     // Process each quiz score for this student
     for (const quizItem of quizIndices) {
@@ -411,14 +415,13 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
       
       const scoreValue = rowData[quizItem.index] || '';
       if (isNotCompletedQuiz(scoreValue)) {
-        // For "Not finished" values, still record with null score for tracking
         data.push({
-          studentName,
           firstName,
           lastName,
+          email,
           quizName: quizItem.quizName,
           score: null,
-          completedAt: new Date().toISOString().split('T')[0] // Default to today
+          completedAt: new Date().toISOString().split('T')[0]
         });
         continue;
       }
@@ -427,12 +430,12 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
       const score = parseScoreValue(scoreValue);
       
       data.push({
-        studentName,
         firstName,
         lastName,
+        email,
         quizName: quizItem.quizName,
         score,
-        completedAt: new Date().toISOString().split('T')[0] // Default to today
+        completedAt: new Date().toISOString().split('T')[0]
       });
     }
   }
