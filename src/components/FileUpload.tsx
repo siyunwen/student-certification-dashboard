@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -74,6 +75,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
   };
 
   const processUploadedFiles = (newFiles: File[]) => {
+    console.log("processUploadedFiles: Starting with", newFiles.length, "files");
     if (!newFiles.length) return;
     
     const validFiles = newFiles.filter(file => {
@@ -90,6 +92,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
       return;
     }
     
+    console.log("processUploadedFiles: Found", validFiles.length, "valid files");
     setFiles(prev => [...prev, ...validFiles]);
     setIsLoading(true);
     
@@ -100,6 +103,7 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
         reader.onload = (event) => {
           try {
             const content = event.target?.result as string;
+            console.log(`Parsing file '${file.name}'...`);
             const parsedFile = parseCSVData(file.name, content);
             console.log(`File '${file.name}' parsed as course: '${parsedFile.courseName}'`);
             console.log(`File type: ${parsedFile.type}, records: ${parsedFile.data.length}`);
@@ -133,18 +137,27 @@ const FileUpload = ({ onFilesLoaded, className }: FileUploadProps) => {
         
         setIsProcessing(true);
         try {
-          console.log('Processing files...');
+          console.log('Processing files with processFiles function...');
           const result = await processFiles(newParsedFiles);
-          console.log('Files processed:', result);
+          console.log('Files processed result:', result);
           
-          if (result.parsedFiles.length > 0) {
+          // Force-trigger localStorage to update UI immediately
+          window.dispatchEvent(new Event('storage'));
+          
+          if (result.students && result.students.length > 0) {
             onFilesLoaded(result.parsedFiles);
-            toast.success(`${validFiles.length} file(s) processed successfully`);
+            toast.success(`${validFiles.length} file(s) processed successfully. Found ${result.students.length} students.`);
+            console.log(`Successfully processed files and found ${result.students.length} students`);
+          } else if (result.parsedFiles.length > 0) {
+            onFilesLoaded(result.parsedFiles);
+            toast.warning('Files were uploaded but no student matches were found. Check if student and quiz names match.');
+            console.log('Files processed but no students found - possible name matching issue');
           } else {
             toast.warning('Files were processed but no valid student data was found. Please check file format.');
+            console.log('No valid student data found in processed files');
           }
         } catch (error) {
-          console.error('Error processing files:', error);
+          console.error('Error in processFiles function:', error);
           toast.error('Failed to process data. Please check console for details.');
         } finally {
           setIsProcessing(false);

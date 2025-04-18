@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue } from './scoreUtils';
 
@@ -7,6 +6,7 @@ export function calculateCertificationStats(
   students: Student[],
   settings: CertificationSettings
 ): CertificationStats {
+  console.log("calculateCertificationStats: Starting with", students.length, "students");
   // Filter out students based on date if needed
   const filteredStudents = settings.dateSince
     ? students.filter(student => {
@@ -177,14 +177,19 @@ export function extractCourseName(filename: string): string {
   
   // For files ending with _quiz_scores or _students, extract the part before that
   if (nameWithoutExt.includes('_quiz_scores')) {
-    return nameWithoutExt.split('_quiz_scores')[0];
+    const coursePart = nameWithoutExt.split('_quiz_scores')[0];
+    console.log(`Extracted course name from quiz file: '${filename}' → '${coursePart}'`);
+    return coursePart;
   }
   
   if (nameWithoutExt.includes('_students')) {
-    return nameWithoutExt.split('_students')[0];
+    const coursePart = nameWithoutExt.split('_students')[0];
+    console.log(`Extracted course name from student file: '${filename}' → '${coursePart}'`);
+    return coursePart;
   }
   
   // If no pattern matches, return original name without extension
+  console.log(`No pattern match for filename '${filename}', using '${nameWithoutExt}'`);
   return nameWithoutExt;
 }
 
@@ -223,7 +228,11 @@ export function parseCSVData(filename: string, content: string): ParsedFile {
   
   // Split content into lines and filter out empty lines
   const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+  
+  console.log(`File has ${lines.length} non-empty lines`);
+  
   if (lines.length < 2) {
+    console.error(`File ${filename} has insufficient data (needs at least header and one data row)`);
     throw new Error(`File ${filename} has insufficient data (needs at least header and one data row)`);
   }
   

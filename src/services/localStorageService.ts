@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, ParsedFile } from '@/types/student';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeScore, parseScoreValue } from '@/utils/scoreUtils';
@@ -10,9 +11,13 @@ const SETTINGS_KEY = 'certification_settings';
 export async function fetchStudents(): Promise<Student[]> {
   try {
     const storedStudents = localStorage.getItem(STUDENTS_KEY);
+    console.log('Fetching students from localStorage:', storedStudents ? 'Found data' : 'No data found');
+    
     if (!storedStudents) return [];
     
-    return JSON.parse(storedStudents);
+    const parsedStudents = JSON.parse(storedStudents);
+    console.log(`Parsed ${parsedStudents.length} students from localStorage`);
+    return parsedStudents;
   } catch (error) {
     console.error('Error fetching students from localStorage:', error);
     return [];
@@ -54,7 +59,7 @@ export async function fetchCertificationSettings(): Promise<CertificationSetting
 
 // Process and store parsed files
 export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedFiles: ParsedFile[], students: Student[] }> {
-  console.log('Processing parsed files:', parsedFiles);
+  console.log('Processing parsed files START:', parsedFiles);
   
   try {
     // Group files by course with support for course merging
@@ -95,6 +100,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
             newFile.courseName = finalCourseName;
           }
           courseMap[finalCourseName].studentFile = newFile;
+          console.log(`Added first student file for course: ${finalCourseName}`);
         }
       } else if (file.type === 'quiz') {
         // For quiz files, merge if there's an existing quiz file
@@ -113,6 +119,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
             newFile.courseName = finalCourseName;
           }
           courseMap[finalCourseName].quizFile = newFile;
+          console.log(`Added first quiz file for course: ${finalCourseName}`);
         }
       }
     });
@@ -124,8 +131,10 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
       ([_, files]) => files.studentFile && files.quizFile
     );
     
+    console.log(`Found ${completeCourses.length} complete courses to process (needs both student and quiz files)`);
+    
     if (completeCourses.length === 0) {
-      console.warn('No complete courses found (need both student and quiz files)');
+      console.warn('No complete courses found (need both student and quiz files for at least one course)');
       return { parsedFiles, students: [] };
     }
     
@@ -199,11 +208,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
         // 4. By just firstName + lastName (without space) - helps with some formats
         studentMap[`${firstName.toLowerCase()}${lastName.toLowerCase()}`] = studentObj;
         
-        console.log(`Added student: ${firstName} ${lastName} with keys: 
-          - ${email.toLowerCase()}
-          - ${firstName.toLowerCase()} ${lastName.toLowerCase()}
-          - ${lastName.toLowerCase()}, ${firstName.toLowerCase()}
-          - ${firstName.toLowerCase()}${lastName.toLowerCase()}`);
+        console.log(`Added student: ${firstName} ${lastName} with matching keys for quiz matching`);
       }
       
       // Map of processed students to avoid duplicates after matching
@@ -238,7 +243,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
           const studentObj = studentMap[formatName1] || studentMap[formatName2] || studentMap[formatName3];
           
           if (studentObj) {
-            console.log(`Matched quiz ${quizName} to student by name formats: ${formatName1} or ${formatName2}`);
+            console.log(`Matched quiz ${quizName} to student by name formats`);
             addQuizToStudent(studentObj, quizName, score, completedAt);
             processedStudents.add(studentObj.id);
             continue;
@@ -258,11 +263,11 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
           const studentObj = studentMap[formatName1] || studentMap[formatName2] || studentMap[formatName3];
           
           if (studentObj) {
-            console.log(`Matched quiz ${quizName} to student by parsed name: ${formatName1} or ${formatName2}`);
+            console.log(`Matched quiz ${quizName} to student by parsed name from quiz student name`);
             addQuizToStudent(studentObj, quizName, score, completedAt);
             processedStudents.add(studentObj.id);
           } else {
-            console.log(`Could not match quiz for student: ${quizData.studentName}`);
+            console.log(`Could not match quiz for student name: "${quizData.studentName}"`);
           }
         }
       }
@@ -275,6 +280,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
           const totalScore = student.quizScores.reduce((sum: number, quiz: any) => sum + quiz.score, 0);
           student.score = normalizeScore(totalScore / student.quizScores.length, true);
           allStudents.push(student);
+          console.log(`Adding student ${student.firstName} ${student.lastName} with ${student.quizScores.length} quizzes and score ${student.score}`);
         }
       }
     }
@@ -283,6 +289,7 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
     
     // Save the processed students to localStorage
     localStorage.setItem(STUDENTS_KEY, JSON.stringify(allStudents));
+    console.log(`Saved ${allStudents.length} students to localStorage with key ${STUDENTS_KEY}`);
     
     return {
       parsedFiles,
@@ -382,6 +389,8 @@ function addQuizToStudent(student: any, quizName: string, score: number, complet
 
 // Clear all stored data
 export async function clearStoredData(): Promise<void> {
+  console.log('Clearing all stored data...');
   localStorage.removeItem(STUDENTS_KEY);
   localStorage.removeItem(SETTINGS_KEY);
+  console.log('Storage cleared.');
 }
