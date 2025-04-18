@@ -246,7 +246,7 @@ export function parseCSVData(filename: string, content: string): ParsedFile {
   
   // Determine file type based on filename and headers
   const isQuizFile = filename.toLowerCase().includes('quiz_scores') || 
-                     headers.some(h => h.toLowerCase() === 'student');
+                     headers.some(h => h.toLowerCase() === 'student_family_name');
   
   const fileType = isQuizFile ? 'quiz' : 'student';
   console.log(`Detected file type: ${fileType}`);
@@ -392,6 +392,8 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
     })
     .filter(item => item !== null) as { index: number; quizName: string }[];
   
+  console.log(`Quiz columns detected: ${quizIndices.map(q => q.quizName).join(', ')}`);
+  
   const data = [];
   
   // Process each line (skipping header)
@@ -414,6 +416,10 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
       if (rowData.length <= quizItem.index) continue;
       
       const scoreValue = rowData[quizItem.index] || '';
+      
+      // Add debug logging for score values
+      console.log(`Raw score for ${firstName} ${lastName}, quiz "${quizItem.quizName}": "${scoreValue}"`);
+      
       if (isNotCompletedQuiz(scoreValue)) {
         data.push({
           firstName,
@@ -428,6 +434,7 @@ function parseQuizFile(courseName: string, headers: string[], lines: string[]): 
       
       // Parse the score value to a number (percentage)
       const score = parseScoreValue(scoreValue);
+      console.log(`Parsed score: ${score}%`);
       
       data.push({
         firstName,

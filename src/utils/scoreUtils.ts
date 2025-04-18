@@ -1,3 +1,4 @@
+
 /**
  * Normalizes scores to ensure consistent format (percentage or decimal)
  */
@@ -99,11 +100,17 @@ export const parseScoreValue = (value: string | number): number => {
     return isNaN(numberValue) ? 0 : numberValue;
   }
   
+  // Add debug log to see what values are being processed
+  console.log(`Parsing quiz score value: "${value}" (${typeof value})`);
+  
   // Remove any non-numeric characters except decimal points
   const cleanValue = value.toString().replace(/[^\d.]/g, '').trim();
   
   // Parse the clean value as a number
   const numberValue = parseFloat(cleanValue);
+  
+  // Add debug log for the parsed value
+  console.log(`Parsed to: ${numberValue}`);
   
   // Return 0 if NaN
   if (isNaN(numberValue)) {

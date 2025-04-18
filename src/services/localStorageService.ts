@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, ParsedFile } from '@/types/student';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeScore, parseScoreValue } from '@/utils/scoreUtils';
@@ -218,60 +217,22 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
         console.log(`Added student: ${firstName} ${lastName} with matching keys for quiz matching`);
       }
       
-      // Debug the quiz file structure
-      if (quizFile.data.length > 0) {
-        const sampleQuiz = quizFile.data[0];
-        console.log('Sample quiz record:', JSON.stringify(sampleQuiz));
-        console.log('Quiz file keys:', Object.keys(sampleQuiz));
-      }
-      
       // Map of processed students to avoid duplicates after matching
       const processedStudents = new Set<string>();
       
       // Now process all quizzes and try to match to students
       for (const quizData of quizFile.data) {
-        // Extract quiz name and score - look for the first property that looks like a quiz score
-        let quizName = '';
-        let quizScore = 0;
+        // Extract quiz name and score
+        const quizName = quizData.quizName || '';
+        const rawScore = quizData.score;
         
-        // Find quiz score from the data - check if there's a property that starts with "Quiz:" or contains "quiz"
-        const quizScoreKeys = Object.keys(quizData).filter(key => 
-          key.toLowerCase().startsWith('quiz:') || 
-          key.toLowerCase().includes('quiz') || 
-          key.toLowerCase().includes('exam') || 
-          key.toLowerCase().includes('test') ||
-          (typeof quizData[key] === 'number' || !isNaN(parseFloat(quizData[key])))
-        );
-        
-        if (quizScoreKeys.length > 0) {
-          // Use the first quiz score found
-          quizName = quizScoreKeys[0];
-          quizScore = parseScoreValue(quizData[quizScoreKeys[0]] || 0);
-        } else {
-          // If no obvious quiz score, try to use any score field
-          const scoreKey = Object.keys(quizData).find(key => 
-            key.toLowerCase().includes('score') ||
-            key.toLowerCase().includes('grade') ||
-            key.toLowerCase().includes('result')
-          );
-          
-          if (scoreKey) {
-            quizName = scoreKey;
-            quizScore = parseScoreValue(quizData[scoreKey] || 0);
-          } else {
-            console.log('Could not find quiz score for record:', JSON.stringify(quizData));
-            continue;
-          }
-        }
+        // Log more details about the quiz data
+        console.log(`Processing quiz: ${quizName}, raw score: ${rawScore} (${typeof rawScore})`);
         
         // Gather all possible student identifiers from quiz data
-        const studentEmail = quizData.student_email || quizData.email || '';
-        const studentId = quizData.student_id || quizData.id || '';
-        const studentGivenName = quizData.student_given_name || quizData.given_name || quizData.first_name || '';
-        const studentFamilyName = quizData.student_family_name || quizData.family_name || quizData.last_name || '';
-        const studentName = quizData.student_name || quizData.name || quizData.studentName || '';
-        
-        console.log(`Trying to match quiz "${quizName}" with score ${quizScore}`);
+        const studentEmail = quizData.email || '';
+        const studentFirstName = quizData.firstName || '';
+        const studentLastName = quizData.lastName || '';
         
         // Try to match by email first (most reliable)
         if (studentEmail) {
@@ -280,35 +241,27 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
           
           if (studentObj) {
             console.log(`Matched quiz ${quizName} to student by email: ${email}`);
-            addQuizToStudent(studentObj, quizName, quizScore);
+            addQuizToStudent(studentObj, quizName, rawScore);
             processedStudents.add(studentObj.id);
             continue;
           }
         }
         
-        // Try to match by student ID
-        if (studentId && studentMap[studentId]) {
-          console.log(`Matched quiz ${quizName} to student by ID: ${studentId}`);
-          addQuizToStudent(studentMap[studentId], quizName, quizScore);
-          processedStudents.add(studentMap[studentId].id);
-          continue;
-        }
-        
-        // Try to match by full name from quiz file
-        if (studentGivenName && studentFamilyName) {
+        // Try to match by full name
+        if (studentFirstName && studentLastName) {
           // Try multiple name formats
           const nameFormats = [
-            `${studentGivenName.toLowerCase()} ${studentFamilyName.toLowerCase()}`,
-            `${studentFamilyName.toLowerCase()}, ${studentGivenName.toLowerCase()}`,
-            `${studentGivenName.toLowerCase()}${studentFamilyName.toLowerCase()}`,
-            `${studentFamilyName.toLowerCase()}${studentGivenName.toLowerCase()}`,
+            `${studentFirstName.toLowerCase()} ${studentLastName.toLowerCase()}`,
+            `${studentLastName.toLowerCase()}, ${studentFirstName.toLowerCase()}`,
+            `${studentFirstName.toLowerCase()}${studentLastName.toLowerCase()}`,
+            `${studentLastName.toLowerCase()}${studentFirstName.toLowerCase()}`,
           ];
           
           let found = false;
           for (const format of nameFormats) {
             if (studentMap[format]) {
               console.log(`Matched quiz ${quizName} to student by name format: ${format}`);
-              addQuizToStudent(studentMap[format], quizName, quizScore);
+              addQuizToStudent(studentMap[format], quizName, rawScore);
               processedStudents.add(studentMap[format].id);
               found = true;
               break;
@@ -318,57 +271,28 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
           if (found) continue;
         }
         
-        // Last resort: try to match by studentName (original string) if available
-        if (studentName) {
-          // Get the parsed firstName, lastName from the studentName
-          const { firstName, lastName } = parseNameFromQuizFile(studentName);
-          
-          // Try multiple name formats with parsed name
-          const nameFormats = [
-            `${firstName.toLowerCase()} ${lastName.toLowerCase()}`,
-            `${lastName.toLowerCase()}, ${firstName.toLowerCase()}`,
-            `${firstName.toLowerCase()}${lastName.toLowerCase()}`,
-            `${lastName.toLowerCase()}${firstName.toLowerCase()}`,
-            firstName.toLowerCase(),  // Try just first name
-            lastName.toLowerCase(),   // Try just last name
-          ];
-          
-          let found = false;
-          for (const format of nameFormats) {
-            if (studentMap[format]) {
-              console.log(`Matched quiz ${quizName} to student by parsed name: ${format} from "${studentName}"`);
-              addQuizToStudent(studentMap[format], quizName, quizScore);
-              processedStudents.add(studentMap[format].id);
-              found = true;
-              break;
-            }
-          }
-          
-          if (found) continue;
-          
-          // Try the original student name as-is
-          const lowerStudentName = studentName.toLowerCase();
-          if (studentMap[lowerStudentName]) {
-            console.log(`Matched quiz ${quizName} to student by exact student name: ${lowerStudentName}`);
-            addQuizToStudent(studentMap[lowerStudentName], quizName, quizScore);
-            processedStudents.add(studentMap[lowerStudentName].id);
+        // Try individual names
+        if (studentFirstName) {
+          const key = studentFirstName.toLowerCase();
+          if (studentMap[key]) {
+            console.log(`Matched quiz ${quizName} to student by first name: ${key}`);
+            addQuizToStudent(studentMap[key], quizName, rawScore);
+            processedStudents.add(studentMap[key].id);
             continue;
           }
-          
-          // If we have numeric student IDs in the quiz file, they might appear as text
-          if (!isNaN(studentName) || studentName.match(/^\d+$/)) {
-            console.log(`Student name appears to be numeric: ${studentName} - trying as student ID`);
-            if (studentMap[studentName]) {
-              addQuizToStudent(studentMap[studentName], quizName, quizScore);
-              processedStudents.add(studentMap[studentName].id);
-              continue;
-            }
-          }
-          
-          console.log(`Could not match quiz for student name: "${studentName}"`);
-        } else {
-          console.log(`Could not match quiz - missing student identifiers:`, JSON.stringify(quizData));
         }
+        
+        if (studentLastName) {
+          const key = studentLastName.toLowerCase();
+          if (studentMap[key]) {
+            console.log(`Matched quiz ${quizName} to student by last name: ${key}`);
+            addQuizToStudent(studentMap[key], quizName, rawScore);
+            processedStudents.add(studentMap[key].id);
+            continue;
+          }
+        }
+        
+        console.log(`Could not match quiz ${quizName} for student: ${studentFirstName} ${studentLastName}`);
       }
       
       // Add all matched students to the final list
@@ -380,7 +304,10 @@ export async function processFiles(parsedFiles: ParsedFile[]): Promise<{ parsedF
             return sum + (typeof quiz.score === 'number' ? quiz.score : 0);
           }, 0);
           
-          student.score = normalizeScore(totalScore / student.quizScores.length, true);
+          const averageScore = totalScore / student.quizScores.length;
+          student.score = averageScore;
+          console.log(`Student ${student.firstName} ${student.lastName}: Calculated average score ${student.score} from ${student.quizScores.length}`);
+          
           allStudents.push(student);
           console.log(`Adding student ${student.firstName} ${student.lastName} with ${student.quizScores.length} quizzes and score ${student.score}`);
         }
@@ -481,12 +408,18 @@ function parseNameFromQuizFile(name: string): { firstName: string; lastName: str
 }
 
 // Helper function to add a quiz to a student
-function addQuizToStudent(student: any, quizName: string, score: number): void {
+function addQuizToStudent(student: any, quizName: string, score: number | string | null): void {
+  // Make sure we properly parse the score
+  const parsedScore = score !== null ? parseScoreValue(score) : null;
+  
+  console.log(`Adding quiz "${quizName}" to ${student.firstName} ${student.lastName} with score: ${parsedScore}%`);
+  
   student.quizScores.push({
     quizName,
-    score,
+    score: parsedScore,
     completedAt: new Date().toISOString().split('T')[0]
   });
+  
   student.courseCompleted = true;
 }
 
