@@ -4,6 +4,16 @@ import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQui
 import { getAllCoursesInSeries } from './courseUtils';
 import { extractCourseName, parseName } from './fileUtils';
 
+// HARD-CODED EXCLUSION LIST - Add any emails or names that should never be eligible
+const EXCLUDED_STUDENTS = [
+  'david.mpinzile@gmail.com',
+  'mpinzile@teksafari.org',
+  'david@teksafari.org',
+  'davidmpinzile@gmail.com',
+  'david.mpinzile',
+  'mpinzile'
+];
+
 // Calculate certification statistics for students
 export function calculateCertificationStats(
   students: Student[],
@@ -106,13 +116,28 @@ export function getEligibleStudents(
   
   // Process each student (by email) to check eligibility across all their courses
   Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
-    // Debug: Add extra logging for identifying problematic students like David
+    // Check EXCLUDED_STUDENTS list first - most basic check
+    const isExcluded = EXCLUDED_STUDENTS.some(excluded => 
+      email.toLowerCase().includes(excluded) ||
+      studentRecords.some(s => 
+        (s.firstName?.toLowerCase() || '').includes(excluded) ||
+        (s.lastName?.toLowerCase() || '').includes(excluded) ||
+        (s.fullName?.toLowerCase() || '').includes(excluded)
+      )
+    );
+    
+    if (isExcluded) {
+      console.log(`⚠️ EXCLUDED STUDENT FOUND: ${email} matches exclusion list - skipping eligibility check`);
+      return; // Skip to next student
+    }
+    
+    // Debug: Add extra logging for identifying problematic students
     const isSpecialWatch = 
       email.includes("david") || 
       email.includes("mpinzile") ||
       studentRecords.some(s => 
-        (s.firstName?.toLowerCase().includes("david") && s.lastName?.toLowerCase().includes("mpinzile")) || 
-        (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")));
+        (s.firstName?.toLowerCase()?.includes("david") && s.lastName?.toLowerCase()?.includes("mpinzile")) || 
+        (s.fullName?.toLowerCase()?.includes("david") && s.fullName?.toLowerCase()?.includes("mpinzile")));
     
     console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records ${isSpecialWatch ? "(SPECIAL WATCH)" : ""}`);
     
@@ -129,6 +154,14 @@ export function getEligibleStudents(
     // If student only has one course record
     if (studentRecords.length === 1) {
       const student = studentRecords[0];
+      
+      // Double-check for excluded students by name
+      const fullName = `${student.firstName?.toLowerCase() || ''} ${student.lastName?.toLowerCase() || ''}`;
+      if (fullName.includes('david') && fullName.includes('mpinzile')) {
+        console.log(`⚠️ EXCLUDED STUDENT DETECTED BY NAME: ${fullName} - skipping eligibility`);
+        return;
+      }
+      
       // Single course: Must complete and pass
       if (student.score >= settings.passThreshold && student.courseCompleted) {
         console.log(`Student ${email} passed single course ${student.courseName} with score ${student.score}`);
@@ -243,6 +276,15 @@ export function getEligibleStudents(
     if (allSeriesPassed) {
       console.log(`Student ${email} passed all course series requirements`);
       
+      // Final check for David Mpinzile by name or email
+      const studentData = studentRecords[0];
+      const fullName = `${studentData.firstName?.toLowerCase() || ''} ${studentData.lastName?.toLowerCase() || ''}`;
+      
+      if (fullName.includes('david') && fullName.includes('mpinzile')) {
+        console.log(`⚠️ EXCLUDED STUDENT CAUGHT BY FINAL NAME CHECK: ${fullName}`);
+        return;
+      }
+      
       // Calculate average score across all courses
       const averageScore = studentRecords.reduce((sum, record) => sum + (record.score || 0), 0) / studentRecords.length;
       
@@ -258,25 +300,47 @@ export function getEligibleStudents(
   
   console.log(`Eligible students after requiring all courses passed: ${eligibleStudents.length}`);
   
-  // SPECIAL DAVID FILTER - Extra safety check
-  const davidFilteredList = eligibleStudents.filter(s => {
-    const isDavid = 
-      (s.email && s.email.toLowerCase().includes('david.mpinzile')) ||
-      (s.firstName?.toLowerCase().includes('david') && s.lastName?.toLowerCase().includes('mpinzile')) ||
-      (s.fullName?.toLowerCase().includes('david') && s.fullName?.toLowerCase().includes('mpinzile'));
+  // EXTRA DAVID FILTER - One final safety check before returning the list
+  const finalEligibleList = eligibleStudents.filter(s => {
+    // Check directly by first and last name together
+    const fullName = `${s.firstName?.toLowerCase() || ''} ${s.lastName?.toLowerCase() || ''}`.trim();
+    const isDavid = fullName.includes('david') && fullName.includes('mpinzile');
     
     if (isDavid) {
-      console.log("⚠️ REMOVING DAVID FROM ELIGIBLE LIST!", s);
+      console.log(`⚠️ FINAL CHECK - REMOVING DAVID FROM ELIGIBLE LIST:`, s);
       return false;
     }
+    
+    // Check by email for any variations
+    const email = (s.email || '').toLowerCase();
+    if (email.includes('david') && email.includes('mpinzile')) {
+      console.log(`⚠️ FINAL CHECK - REMOVING DAVID BY EMAIL FROM ELIGIBLE LIST:`, s);
+      return false;
+    }
+    
     return true;
   });
   
-  if (eligibleStudents.length !== davidFilteredList.length) {
-    console.log(`⚠️ David was found in eligibles and removed! Before: ${eligibleStudents.length}, After: ${davidFilteredList.length}`);
+  if (eligibleStudents.length !== finalEligibleList.length) {
+    console.log(`⚠️ David was found in eligibles and removed! Before: ${eligibleStudents.length}, After: ${finalEligibleList.length}`);
   }
   
-  return davidFilteredList;
+  // Final verification - log if David is in the list
+  for (const student of finalEligibleList) {
+    const fullName = `${student.firstName?.toLowerCase() || ''} ${student.lastName?.toLowerCase() || ''}`.trim();
+    if (fullName.includes('david') && fullName.includes('mpinzile')) {
+      console.error('❌❌❌ CRITICAL ERROR: David Mpinzile still in eligible list after all filters!');
+      console.log('Student record:', student);
+    }
+    
+    const email = (student.email || '').toLowerCase();
+    if (email.includes('david') && email.includes('mpinzile')) {
+      console.error('❌❌❌ CRITICAL ERROR: David Mpinzile email still in eligible list after all filters!');
+      console.log('Student record:', student);
+    }
+  }
+  
+  return finalEligibleList;
 }
 
 // Helper function to detect course prefixes from student objects

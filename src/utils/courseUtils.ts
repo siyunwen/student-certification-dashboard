@@ -86,8 +86,13 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 }
 
-// Get all available courses in a series
+// Get all available courses in a series - IMPROVED with exact prefix matching
 export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: string): string[] {
+  if (!seriesPrefix) {
+    console.log("WARNING: Empty series prefix provided to getAllCoursesInSeries!");
+    return [];
+  }
+  
   // This is the key fix: ensure we're getting all courses that start with the prefix
   const matchingCourses = courseNames.filter(name => {
     if (!name) return false;
@@ -109,6 +114,7 @@ export function getCoursePrefixForFile(courseName: string, prefixes: string[]): 
   const sortedPrefixes = [...prefixes].sort((a, b) => b.length - a.length);
   
   for (const prefix of sortedPrefixes) {
+    if (!prefix) continue; // Skip empty prefixes
     const matches = courseName.startsWith(prefix);
     console.log(`Checking if course "${courseName}" matches prefix "${prefix}": ${matches}`);
     if (matches) {
