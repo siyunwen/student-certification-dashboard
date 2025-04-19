@@ -1,4 +1,3 @@
-
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 
@@ -57,7 +56,7 @@ export function calculateCertificationStats(
   };
 }
 
-// Get students eligible for certification - updated to require passing ALL courses within a course series
+// Get students eligible for certification - updated to handle incomplete course series
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
