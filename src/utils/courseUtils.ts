@@ -17,19 +17,26 @@ export function detectCoursePrefixes(files: ParsedFile[]): string[] {
 export function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   const prefixMap: Record<string, number> = {};
   
-  // Updated to consider just the first 4 characters (e.g., "aifi" from "aifi_301")
+  // Extract proper course prefixes with regex pattern matching
   courseNames.forEach(name => {
-    if (!name || name.length < 4) return;
+    if (!name) return;
     
-    // Get first 4 characters as the prefix
-    const prefix = name.substring(0, 4);
-    prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+    // Extract course prefix like "aifi_" from "aifi_301"
+    const match = name.match(/^([a-zA-Z]+_?)/);
+    if (match && match[1]) {
+      const prefix = match[1];
+      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+      console.log(`Detected prefix "${prefix}" from course "${name}"`);
+    }
   });
   
   // Only consider prefixes that appear more than once
-  return Object.entries(prefixMap)
+  const validPrefixes = Object.entries(prefixMap)
     .filter(([_, count]) => count > 1)
     .map(([prefix]) => prefix);
+  
+  console.log("Valid course prefixes:", validPrefixes);
+  return validPrefixes;
 }
 
 // Group files by course and check if each course has both student and quiz files
@@ -78,10 +85,15 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 }
 
-// Get all available courses in a series - FIXED to use startsWith instead of exact prefix
+// Get all available courses in a series
 export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: string): string[] {
   // This is the key fix: ensure we're getting all courses that start with the prefix
-  const matchingCourses = courseNames.filter(name => name && name.startsWith(seriesPrefix));
+  const matchingCourses = courseNames.filter(name => {
+    const matches = name && name.startsWith(seriesPrefix);
+    console.log(`Course "${name}" ${matches ? "MATCHES" : "does NOT match"} prefix "${seriesPrefix}"`);
+    return matches;
+  });
+  
   console.log(`getAllCoursesInSeries for prefix "${seriesPrefix}": Found ${matchingCourses.length} matching courses:`, matchingCourses);
   return matchingCourses;
 }
@@ -89,7 +101,9 @@ export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: strin
 // Helper function to get the course prefix for a file
 export function getCoursePrefixForFile(courseName: string, prefixes: string[]): string | null {
   for (const prefix of prefixes) {
-    if (courseName.startsWith(prefix)) {
+    const matches = courseName.startsWith(prefix);
+    console.log(`Checking if course "${courseName}" matches prefix "${prefix}": ${matches}`);
+    if (matches) {
       return prefix;
     }
   }

@@ -59,7 +59,7 @@ export function calculateCertificationStats(
   };
 }
 
-// Get students eligible for certification - updated to handle incomplete course series
+// Get students eligible for certification - updated to strictly validate course series enrollment
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
@@ -101,20 +101,25 @@ export function getEligibleStudents(
   
   const eligibleStudents: Student[] = [];
   
+  // Process each student (by email) to check eligibility across all their courses
   Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
     console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records`);
     
     // Debug output for specific students we're troubleshooting
-    const isSpecialWatch = email.includes("david.mpinzile") || 
-                          studentRecords.some(s => 
-                            (s.firstName?.toLowerCase() === "david" && s.lastName?.toLowerCase() === "mpinzile") || 
-                            (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")));
+    const isSpecialWatch = 
+      email.includes("david.mpinzile") || 
+      email.includes("mpinzile") ||
+      studentRecords.some(s => 
+        (s.firstName?.toLowerCase().includes("david") && s.lastName?.toLowerCase().includes("mpinzile")) || 
+        (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")));
     
     if (isSpecialWatch) {
-      console.log("FOUND SPECIAL WATCH STUDENT:", studentRecords.map(s => ({
+      console.log("SPECIAL WATCH STUDENT FOUND:", studentRecords.map(s => ({
         courseName: s.courseName,
         score: s.score,
-        completed: s.courseCompleted
+        completed: s.courseCompleted,
+        email: s.email,
+        fullName: `${s.firstName} ${s.lastName}`
       })));
     }
     
@@ -152,44 +157,64 @@ export function getEligibleStudents(
       enrolledCourses.push(record.courseName);
     });
     
-    // 2. Check that student passed EVERY course within EACH series AND has enrolled in ALL available courses for EACH series
+    // Debug course series grouping for watched students
+    if (isSpecialWatch) {
+      console.log(`SPECIAL WATCH: Course series grouping:`);
+      Object.entries(coursesBySeries).forEach(([prefix, courses]) => {
+        console.log(`- Series ${prefix}: ${courses.map(c => c.courseName).join(', ')}`);
+      });
+    }
+    
+    // 2. Check that student has enrolled in ALL available courses for EACH series and PASSED all of them
     let allSeriesPassed = true;
     
     Object.entries(coursesBySeries).forEach(([seriesPrefix, seriesRecords]) => {
       // Get all available courses for this series from the system
       const allCoursesInSeries = getAllCoursesInSeries(allAvailableCourses, seriesPrefix);
-      console.log(`Student ${email}: Series ${seriesPrefix} - Enrolled in ${seriesRecords.length}/${allCoursesInSeries.length} courses`);
       
       if (isSpecialWatch) {
-        console.log(`SPECIAL WATCH: Series ${seriesPrefix}`);
-        console.log(`  All courses in series: ${allCoursesInSeries.join(', ')}`);
-        console.log(`  Student enrolled in: ${seriesRecords.map(r => r.courseName).join(', ')}`);
+        console.log(`SPECIAL WATCH: Analyzing series "${seriesPrefix}" for ${email}`);
+        console.log(`- All courses in this series: ${JSON.stringify(allCoursesInSeries)}`);
+        console.log(`- Student enrolled in: ${JSON.stringify(seriesRecords.map(r => r.courseName))}`);
       }
       
       // Get the enrolled course names for this series
       const enrolledCourseNames = seriesRecords.map(r => r.courseName).filter(Boolean) as string[];
       
       // Check if the student is enrolled in all courses in the series
-      const isEnrolledInAllCourses = allCoursesInSeries.every(courseName => 
-        enrolledCourseNames.includes(courseName)
-      );
+      let missingCourses = [];
+      const isEnrolledInAllCourses = allCoursesInSeries.every(courseName => {
+        const isEnrolled = enrolledCourseNames.includes(courseName);
+        if (!isEnrolled) {
+          missingCourses.push(courseName);
+        }
+        return isEnrolled;
+      });
       
       // For this particular series, check if ALL courses were passed and completed
       const seriesPassed = seriesRecords.every(record => 
         record.score >= settings.passThreshold && record.courseCompleted
       );
       
+      // Debug enrollment check for watched students
+      if (isSpecialWatch) {
+        console.log(`SPECIAL WATCH: Enrollment check for ${email} in series ${seriesPrefix}:`);
+        console.log(`- All courses in series: ${allCoursesInSeries.join(', ')}`);
+        console.log(`- Student enrolled in: ${enrolledCourseNames.join(', ')}`);
+        console.log(`- Missing courses: ${missingCourses.join(', ')}`);
+        console.log(`- Enrolled in all courses? ${isEnrolledInAllCourses}`);
+        console.log(`- Passed all enrolled courses? ${seriesPassed}`);
+      }
+      
       // Student must have passed all courses AND be enrolled in all courses for the series
       if (!isEnrolledInAllCourses) {
-        console.log(`ENROLLMENT CHECK FAILED for ${email}:`);
-        console.log(`  All courses in series: ${allCoursesInSeries.join(', ')}`);
-        console.log(`  Student enrolled in: ${enrolledCourseNames.join(', ')}`);
-        console.log(`  Missing courses: ${allCoursesInSeries.filter(c => !enrolledCourseNames.includes(c)).join(', ')}`);
+        console.log(`ENROLLMENT CHECK FAILED for ${email} in series ${seriesPrefix}:`);
+        console.log(`  Missing courses: ${missingCourses.join(', ')}`);
         allSeriesPassed = false;
       }
       
       if (!seriesPassed) {
-        console.log(`PASSING CHECK FAILED for ${email}:`);
+        console.log(`PASSING CHECK FAILED for ${email} in series ${seriesPrefix}:`);
         const failedCourses = seriesRecords.filter(r => r.score < settings.passThreshold || !r.courseCompleted);
         console.log(`  Failed courses: ${failedCourses.map(c => `${c.courseName}(${c.score}%)`).join(', ')}`);
         allSeriesPassed = false;
@@ -198,7 +223,7 @@ export function getEligibleStudents(
     
     // Only if the student passed ALL courses in ALL series they're eligible
     if (allSeriesPassed) {
-      console.log(`Student ${email} passed all course series`);
+      console.log(`Student ${email} passed all course series requirements`);
       // Calculate average score across all courses
       const averageScore = studentRecords.reduce((sum, record) => sum + (record.score || 0), 0) / studentRecords.length;
       
@@ -208,11 +233,25 @@ export function getEligibleStudents(
       representativeRecord.allCourses = enrolledCourses;
       eligibleStudents.push(representativeRecord);
     } else {
-      console.log(`Student ${email} did NOT pass all course series`);
+      console.log(`Student ${email} did NOT pass all course series requirements`);
+      
+      // Special debug for watched students
+      if (isSpecialWatch) {
+        console.log(`SPECIAL WATCH: Student ${email} is NOT eligible`);
+      }
     }
   });
   
   console.log(`Eligible students after requiring all courses passed in each series: ${eligibleStudents.length}`);
+  
+  // Final verification - make sure David is not in the eligible list
+  const davidInList = eligibleStudents.some(s => 
+    (s.email && s.email.toLowerCase().includes('david.mpinzile')) ||
+    (s.firstName?.toLowerCase().includes('david') && s.lastName?.toLowerCase().includes('mpinzile'))
+  );
+  
+  console.log(`Is David Mpinzile in eligible list? ${davidInList}`);
+  
   return eligibleStudents;
 }
 
