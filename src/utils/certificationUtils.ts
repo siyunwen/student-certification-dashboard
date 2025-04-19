@@ -104,11 +104,14 @@ export function getEligibleStudents(
   Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
     console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records`);
     
-    // Debug output for David Mpinzile
-    if (email.includes("david.mpinzile") || studentRecords.some(s => 
-        (s.firstName?.toLowerCase() === "david" && s.lastName?.toLowerCase() === "mpinzile") || 
-        (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")))) {
-      console.log("FOUND DAVID MPINZILE:", studentRecords.map(s => ({
+    // Debug output for specific students we're troubleshooting
+    const isSpecialWatch = email.includes("david.mpinzile") || 
+                          studentRecords.some(s => 
+                            (s.firstName?.toLowerCase() === "david" && s.lastName?.toLowerCase() === "mpinzile") || 
+                            (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")));
+    
+    if (isSpecialWatch) {
+      console.log("FOUND SPECIAL WATCH STUDENT:", studentRecords.map(s => ({
         courseName: s.courseName,
         score: s.score,
         completed: s.courseCompleted
@@ -138,7 +141,7 @@ export function getEligibleStudents(
       if (!record.courseName) return;
       
       // Extract course series prefix (e.g., "aifi_" from "aifi_301")
-      const match = record.courseName.match(/^([a-zA-Z]+_)/);
+      const match = record.courseName.match(/^([a-zA-Z]+_?)/);
       const seriesPrefix = match ? match[1] : record.courseName; // Use full name if no prefix pattern found
       
       if (!coursesBySeries[seriesPrefix]) {
@@ -156,6 +159,12 @@ export function getEligibleStudents(
       // Get all available courses for this series from the system
       const allCoursesInSeries = getAllCoursesInSeries(allAvailableCourses, seriesPrefix);
       console.log(`Student ${email}: Series ${seriesPrefix} - Enrolled in ${seriesRecords.length}/${allCoursesInSeries.length} courses`);
+      
+      if (isSpecialWatch) {
+        console.log(`SPECIAL WATCH: Series ${seriesPrefix}`);
+        console.log(`  All courses in series: ${allCoursesInSeries.join(', ')}`);
+        console.log(`  Student enrolled in: ${seriesRecords.map(r => r.courseName).join(', ')}`);
+      }
       
       // Get the enrolled course names for this series
       const enrolledCourseNames = seriesRecords.map(r => r.courseName).filter(Boolean) as string[];

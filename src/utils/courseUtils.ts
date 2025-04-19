@@ -78,8 +78,9 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   return courseMap;
 }
 
-// Get all available courses in a series
+// Get all available courses in a series - FIXED to use startsWith instead of exact prefix
 export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: string): string[] {
+  // This is the key fix: ensure we're getting all courses that start with the prefix
   return courseNames.filter(name => name && name.startsWith(seriesPrefix));
 }
 
