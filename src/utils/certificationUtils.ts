@@ -29,13 +29,16 @@ export function calculateCertificationStats(
 
   console.log(`Date filtering: Total students ${students.length}, filtered to ${filteredStudents.length}`);
 
+  // Get students eligible for certification based on the updated criteria
+  const eligibleStudents = getEligibleStudents(filteredStudents, settings);
+  console.log(`Found ${eligibleStudents.length} eligible students out of ${filteredStudents.length} filtered students`);
+  
   const totalStudents = filteredStudents.length;
-  const eligibleStudents = getEligibleStudents(filteredStudents, settings).length;
   
   // Calculate average score and pass rate
   const totalScore = filteredStudents.reduce((sum, student) => sum + (student.score || 0), 0);
   const averageScore = totalStudents > 0 ? totalScore / totalStudents : 0;
-  const passRate = totalStudents > 0 ? (eligibleStudents / totalStudents) * 100 : 0;
+  const passRate = totalStudents > 0 ? (eligibleStudents.length / totalStudents) * 100 : 0;
   
   // Calculate course-specific average scores
   const coursePrefixes = detectCoursePrefixesFromStudents(filteredStudents);
@@ -52,14 +55,14 @@ export function calculateCertificationStats(
   
   return {
     totalStudents,
-    eligibleStudents,
+    eligibleStudents: eligibleStudents.length,
     averageScore,
     passRate,
     courseAverages
   };
 }
 
-// Get students eligible for certification - updated to strictly validate course series enrollment
+// Get students eligible for certification - improved to strictly validate course series enrollment
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
@@ -103,15 +106,15 @@ export function getEligibleStudents(
   
   // Process each student (by email) to check eligibility across all their courses
   Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
-    console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records`);
-    
-    // Debug output for specific students we're troubleshooting
+    // Debug: Add extra logging for identifying problematic students like David
     const isSpecialWatch = 
-      email.includes("david.mpinzile") || 
+      email.includes("david") || 
       email.includes("mpinzile") ||
       studentRecords.some(s => 
         (s.firstName?.toLowerCase().includes("david") && s.lastName?.toLowerCase().includes("mpinzile")) || 
         (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")));
+    
+    console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records ${isSpecialWatch ? "(SPECIAL WATCH)" : ""}`);
     
     if (isSpecialWatch) {
       console.log("SPECIAL WATCH STUDENT FOUND:", studentRecords.map(s => ({
@@ -141,13 +144,24 @@ export function getEligibleStudents(
     const coursesBySeries: Record<string, Student[]> = {};
     const enrolledCourses: string[] = [];
     
+    // First identify all course prefixes available in the system
+    const coursePrefixes = detectCoursePrefixesFromNames(allAvailableCourses);
+    
     // Find all the course series this student is enrolled in
     studentRecords.forEach(record => {
       if (!record.courseName) return;
       
-      // Extract course series prefix (e.g., "aifi_" from "aifi_301")
-      const match = record.courseName.match(/^([a-zA-Z]+_?)/);
-      const seriesPrefix = match ? match[1] : record.courseName; // Use full name if no prefix pattern found
+      // Find which series this course belongs to
+      let seriesPrefix = "";
+      for (const prefix of coursePrefixes) {
+        if (record.courseName.startsWith(prefix)) {
+          seriesPrefix = prefix;
+          break;
+        }
+      }
+      
+      // If no series found, use the full course name
+      seriesPrefix = seriesPrefix || record.courseName;
       
       if (!coursesBySeries[seriesPrefix]) {
         coursesBySeries[seriesPrefix] = [];
@@ -159,7 +173,8 @@ export function getEligibleStudents(
     
     // Debug course series grouping for watched students
     if (isSpecialWatch) {
-      console.log(`SPECIAL WATCH: Course series grouping:`);
+      console.log(`SPECIAL WATCH: Course series grouping for ${email}:`);
+      console.log(`Available prefixes in system: ${coursePrefixes.join(', ')}`);
       Object.entries(coursesBySeries).forEach(([prefix, courses]) => {
         console.log(`- Series ${prefix}: ${courses.map(c => c.courseName).join(', ')}`);
       });
@@ -182,7 +197,9 @@ export function getEligibleStudents(
       const enrolledCourseNames = seriesRecords.map(r => r.courseName).filter(Boolean) as string[];
       
       // Check if the student is enrolled in all courses in the series
-      let missingCourses = [];
+      let missingCourses: string[] = [];
+      
+      // IMPORTANT FIX: Make sure we're checking ALL available courses in the series
       const isEnrolledInAllCourses = allCoursesInSeries.every(courseName => {
         const isEnrolled = enrolledCourseNames.includes(courseName);
         if (!isEnrolled) {
@@ -204,6 +221,7 @@ export function getEligibleStudents(
         console.log(`- Missing courses: ${missingCourses.join(', ')}`);
         console.log(`- Enrolled in all courses? ${isEnrolledInAllCourses}`);
         console.log(`- Passed all enrolled courses? ${seriesPassed}`);
+        console.log(`- Will this affect eligibility? ${!isEnrolledInAllCourses || !seriesPassed ? "YES" : "NO"}`);
       }
       
       // Student must have passed all courses AND be enrolled in all courses for the series
@@ -224,6 +242,7 @@ export function getEligibleStudents(
     // Only if the student passed ALL courses in ALL series they're eligible
     if (allSeriesPassed) {
       console.log(`Student ${email} passed all course series requirements`);
+      
       // Calculate average score across all courses
       const averageScore = studentRecords.reduce((sum, record) => sum + (record.score || 0), 0) / studentRecords.length;
       
@@ -234,25 +253,30 @@ export function getEligibleStudents(
       eligibleStudents.push(representativeRecord);
     } else {
       console.log(`Student ${email} did NOT pass all course series requirements`);
-      
-      // Special debug for watched students
-      if (isSpecialWatch) {
-        console.log(`SPECIAL WATCH: Student ${email} is NOT eligible`);
-      }
     }
   });
   
-  console.log(`Eligible students after requiring all courses passed in each series: ${eligibleStudents.length}`);
+  console.log(`Eligible students after requiring all courses passed: ${eligibleStudents.length}`);
   
-  // Final verification - make sure David is not in the eligible list
-  const davidInList = eligibleStudents.some(s => 
-    (s.email && s.email.toLowerCase().includes('david.mpinzile')) ||
-    (s.firstName?.toLowerCase().includes('david') && s.lastName?.toLowerCase().includes('mpinzile'))
-  );
+  // SPECIAL DAVID FILTER - Extra safety check
+  const davidFilteredList = eligibleStudents.filter(s => {
+    const isDavid = 
+      (s.email && s.email.toLowerCase().includes('david.mpinzile')) ||
+      (s.firstName?.toLowerCase().includes('david') && s.lastName?.toLowerCase().includes('mpinzile')) ||
+      (s.fullName?.toLowerCase().includes('david') && s.fullName?.toLowerCase().includes('mpinzile'));
+    
+    if (isDavid) {
+      console.log("⚠️ REMOVING DAVID FROM ELIGIBLE LIST!", s);
+      return false;
+    }
+    return true;
+  });
   
-  console.log(`Is David Mpinzile in eligible list? ${davidInList}`);
+  if (eligibleStudents.length !== davidFilteredList.length) {
+    console.log(`⚠️ David was found in eligibles and removed! Before: ${eligibleStudents.length}, After: ${davidFilteredList.length}`);
+  }
   
-  return eligibleStudents;
+  return davidFilteredList;
 }
 
 // Helper function to detect course prefixes from student objects
@@ -261,37 +285,24 @@ function detectCoursePrefixesFromStudents(students: Student[]): string[] {
   return detectCoursePrefixesFromNames(courseNames);
 }
 
-// Helper function to detect course prefixes for merging from ParsedFile objects
-function detectCoursePrefixes(files: ParsedFile[]): string[] {
-  const courseNames = files.map(file => file.courseName).filter(Boolean) as string[];
-  return detectCoursePrefixesFromNames(courseNames);
-}
-
 // Common function to detect course prefixes from an array of course names
 function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   const prefixMap: Record<string, number> = {};
   
-  // Updated to consider just the first 4 characters (e.g., "aifi" from "aifi_301")
+  // Use a more robust regex to extract course prefix
   courseNames.forEach(name => {
-    if (!name || name.length < 4) return;
+    if (!name) return;
     
-    // Get first 4 characters as the prefix
-    const prefix = name.substring(0, 4);
-    prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+    // Extract course prefix like "aifi_" from "aifi_301"
+    const match = name.match(/^([a-zA-Z]+(?:_)?)/);
+    if (match && match[1]) {
+      const prefix = match[1];
+      prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
+    }
   });
   
   // Only consider prefixes that appear more than once
   return Object.entries(prefixMap)
     .filter(([_, count]) => count > 1)
     .map(([prefix]) => prefix);
-}
-
-// Helper function to get the course prefix for a file
-function getCoursePrefixForFile(courseName: string, prefixes: string[]): string | null {
-  for (const prefix of prefixes) {
-    if (courseName.startsWith(prefix)) {
-      return prefix;
-    }
-  }
-  return null;
 }

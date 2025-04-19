@@ -21,8 +21,9 @@ export function detectCoursePrefixesFromNames(courseNames: string[]): string[] {
   courseNames.forEach(name => {
     if (!name) return;
     
-    // Extract course prefix like "aifi_" from "aifi_301"
-    const match = name.match(/^([a-zA-Z]+_?)/);
+    // Use a more robust regex to extract course prefix (e.g., "aifi_" from "aifi_301")
+    // This will match alphabetical characters followed by an underscore or number
+    const match = name.match(/^([a-zA-Z]+(?:_)?)/);
     if (match && match[1]) {
       const prefix = match[1];
       prefixMap[prefix] = (prefixMap[prefix] || 0) + 1;
@@ -89,8 +90,9 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
 export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: string): string[] {
   // This is the key fix: ensure we're getting all courses that start with the prefix
   const matchingCourses = courseNames.filter(name => {
-    const matches = name && name.startsWith(seriesPrefix);
-    console.log(`Course "${name}" ${matches ? "MATCHES" : "does NOT match"} prefix "${seriesPrefix}"`);
+    if (!name) return false;
+    const matches = name.startsWith(seriesPrefix);
+    console.log(`getAllCoursesInSeries: Course "${name}" ${matches ? "MATCHES" : "does NOT match"} prefix "${seriesPrefix}"`);
     return matches;
   });
   
@@ -98,9 +100,15 @@ export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: strin
   return matchingCourses;
 }
 
-// Helper function to get the course prefix for a file
+// Helper function to get the course prefix for a file - improved matching
 export function getCoursePrefixForFile(courseName: string, prefixes: string[]): string | null {
-  for (const prefix of prefixes) {
+  // Make sure we have a valid course name and prefixes
+  if (!courseName || prefixes.length === 0) return null;
+  
+  // Sort prefixes by length (descending) to match the most specific prefix first
+  const sortedPrefixes = [...prefixes].sort((a, b) => b.length - a.length);
+  
+  for (const prefix of sortedPrefixes) {
     const matches = courseName.startsWith(prefix);
     console.log(`Checking if course "${courseName}" matches prefix "${prefix}": ${matches}`);
     if (matches) {
