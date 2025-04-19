@@ -1,3 +1,4 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 
@@ -56,7 +57,7 @@ export function calculateCertificationStats(
   };
 }
 
-// Get students eligible for certification - updated to require all courses passed
+// Get students eligible for certification - updated to require passing ALL courses within a course series
 export function getEligibleStudents(
   students: Student[],
   settings: CertificationSettings
@@ -102,17 +103,47 @@ export function getEligibleStudents(
       return;
     }
     
-    // For multiple courses: Must pass ALL courses they're enrolled in
-    const enrolledCourses = studentRecords.map(r => r.courseName || '').filter(Boolean);
+    // For multiple courses: 
+    // 1. Group courses by their series prefix (e.g., "aifi_" for "aifi_301", "aifi_302")
+    const coursesBySeries = studentRecords.reduce((series: Record<string, Student[]>, record) => {
+      if (!record.courseName) return series;
+      
+      // Extract course series prefix (e.g., "aifi_" from "aifi_301")
+      const match = record.courseName.match(/^([a-zA-Z]+_)/);
+      const seriesPrefix = match ? match[1] : record.courseName; // Use full name if no prefix pattern found
+      
+      if (!series[seriesPrefix]) {
+        series[seriesPrefix] = [];
+      }
+      series[seriesPrefix].push(record);
+      return series;
+    }, {});
     
-    // Check if student has passed ALL their courses
-    const allCoursesPassed = studentRecords.every(record => 
-      record.score >= settings.passThreshold && record.courseCompleted
-    );
+    // 2. Check that student passed EVERY course within EACH series
+    let allSeriesPassed = true;
+    const enrolledCourses: string[] = [];
     
-    if (allCoursesPassed) {
+    Object.entries(coursesBySeries).forEach(([seriesPrefix, seriesRecords]) => {
+      // Add all courses from this series to the enrolled courses list
+      const seriesCourseNames = seriesRecords.map(r => r.courseName || '').filter(Boolean);
+      enrolledCourses.push(...seriesCourseNames);
+      
+      // For this particular series, check if ALL courses were passed and completed
+      const seriesPassed = seriesRecords.every(record => 
+        record.score >= settings.passThreshold && record.courseCompleted
+      );
+      
+      // If any series wasn't passed in full, student isn't eligible
+      if (!seriesPassed) {
+        allSeriesPassed = false;
+        console.log(`Student ${studentRecords[0].email} failed series ${seriesPrefix}`);
+      }
+    });
+    
+    // Only if the student passed ALL courses in ALL series they're eligible
+    if (allSeriesPassed) {
       // Calculate average score across all courses
-      const averageScore = studentRecords.reduce((sum, record) => sum + record.score, 0) / studentRecords.length;
+      const averageScore = studentRecords.reduce((sum, record) => sum + (record.score || 0), 0) / studentRecords.length;
       
       // Use the first record but attach the combined course info
       const representativeRecord = {...studentRecords[0]};
@@ -122,7 +153,7 @@ export function getEligibleStudents(
     }
   });
   
-  console.log(`Eligible students after requiring all courses passed: ${eligibleStudents.length}`);
+  console.log(`Eligible students after requiring all courses passed in each series: ${eligibleStudents.length}`);
   return eligibleStudents;
 }
 
