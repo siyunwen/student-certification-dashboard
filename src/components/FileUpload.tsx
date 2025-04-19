@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ParsedFile } from '@/types/student';
-import { parseCSVData } from '@/utils/certificationUtils';
+import { parseCSVData } from '@/utils/fileParsingUtils';
 import { processFiles } from '@/services/localStorageService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
