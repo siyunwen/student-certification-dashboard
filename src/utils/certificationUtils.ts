@@ -1,5 +1,7 @@
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
+import { getAllCoursesInSeries } from './courseUtils';
+import { extractCourseName, parseName, parseCSVData, parseCSVRow } from './fileUtils';
 
 // Calculate certification statistics for students
 export function calculateCertificationStats(
@@ -76,6 +78,11 @@ export function getEligibleStudents(
       })
     : students;
   
+  // Get all available course names first
+  const allAvailableCourses = Array.from(
+    new Set(filteredByDate.map(s => s.courseName).filter(Boolean))
+  ) as string[];
+  
   // Group students by email to check across all their courses
   const studentsByEmail = filteredByDate.reduce((groups: Record<string, Student[]>, student) => {
     if (!student.email) return groups;
@@ -91,56 +98,81 @@ export function getEligibleStudents(
   
   const eligibleStudents: Student[] = [];
   
-  Object.values(studentsByEmail).forEach(studentRecords => {
+  Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
+    console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records`);
+    
     // If student only has one course record
     if (studentRecords.length === 1) {
       const student = studentRecords[0];
       // Single course: Must complete and pass
       if (student.score >= settings.passThreshold && student.courseCompleted) {
+        console.log(`Student ${email} passed single course ${student.courseName} with score ${student.score}`);
         eligibleStudents.push(student);
+      } else {
+        console.log(`Student ${email} failed single course ${student.courseName} with score ${student.score}, completed: ${student.courseCompleted}`);
       }
       return;
     }
     
     // For multiple courses: 
     // 1. Group courses by their series prefix (e.g., "aifi_" for "aifi_301", "aifi_302")
-    const coursesBySeries = studentRecords.reduce((series: Record<string, Student[]>, record) => {
-      if (!record.courseName) return series;
+    const coursesBySeries: Record<string, Student[]> = {};
+    const enrolledCourses: string[] = [];
+    
+    // Find all the course series this student is enrolled in
+    studentRecords.forEach(record => {
+      if (!record.courseName) return;
       
       // Extract course series prefix (e.g., "aifi_" from "aifi_301")
       const match = record.courseName.match(/^([a-zA-Z]+_)/);
       const seriesPrefix = match ? match[1] : record.courseName; // Use full name if no prefix pattern found
       
-      if (!series[seriesPrefix]) {
-        series[seriesPrefix] = [];
+      if (!coursesBySeries[seriesPrefix]) {
+        coursesBySeries[seriesPrefix] = [];
       }
-      series[seriesPrefix].push(record);
-      return series;
-    }, {});
+      
+      coursesBySeries[seriesPrefix].push(record);
+      enrolledCourses.push(record.courseName);
+    });
     
-    // 2. Check that student passed EVERY course within EACH series
+    // 2. Check that student passed EVERY course within EACH series AND has enrolled in ALL available courses for EACH series
     let allSeriesPassed = true;
-    const enrolledCourses: string[] = [];
     
     Object.entries(coursesBySeries).forEach(([seriesPrefix, seriesRecords]) => {
-      // Add all courses from this series to the enrolled courses list
-      const seriesCourseNames = seriesRecords.map(r => r.courseName || '').filter(Boolean);
-      enrolledCourses.push(...seriesCourseNames);
+      // Get all available courses for this series from the system
+      const allCoursesInSeries = getAllCoursesInSeries(allAvailableCourses, seriesPrefix);
+      console.log(`Student ${email}: Series ${seriesPrefix} - Enrolled in ${seriesRecords.length}/${allCoursesInSeries.length} courses`);
+      
+      // Get the enrolled course names for this series
+      const enrolledCourseNames = seriesRecords.map(r => r.courseName).filter(Boolean) as string[];
+      
+      // Check if the student is enrolled in all courses in the series
+      const isEnrolledInAllCourses = allCoursesInSeries.every(courseName => 
+        enrolledCourseNames.includes(courseName)
+      );
       
       // For this particular series, check if ALL courses were passed and completed
       const seriesPassed = seriesRecords.every(record => 
         record.score >= settings.passThreshold && record.courseCompleted
       );
       
-      // If any series wasn't passed in full, student isn't eligible
-      if (!seriesPassed) {
+      // Student must have passed all courses AND be enrolled in all courses for the series
+      if (!seriesPassed || !isEnrolledInAllCourses) {
         allSeriesPassed = false;
-        console.log(`Student ${studentRecords[0].email} failed series ${seriesPrefix}`);
+        console.log(`Student ${email} failed series ${seriesPrefix}: passed all=${seriesPassed}, enrolled in all=${isEnrolledInAllCourses}`);
+        if (!isEnrolledInAllCourses) {
+          console.log(`  Missing courses: ${allCoursesInSeries.filter(c => !enrolledCourseNames.includes(c)).join(', ')}`);
+        }
+        if (!seriesPassed) {
+          const failedCourses = seriesRecords.filter(r => r.score < settings.passThreshold || !r.courseCompleted);
+          console.log(`  Failed courses: ${failedCourses.map(c => `${c.courseName}(${c.score}%)`).join(', ')}`);
+        }
       }
     });
     
     // Only if the student passed ALL courses in ALL series they're eligible
     if (allSeriesPassed) {
+      console.log(`Student ${email} passed all course series`);
       // Calculate average score across all courses
       const averageScore = studentRecords.reduce((sum, record) => sum + (record.score || 0), 0) / studentRecords.length;
       
@@ -154,52 +186,6 @@ export function getEligibleStudents(
   
   console.log(`Eligible students after requiring all courses passed in each series: ${eligibleStudents.length}`);
   return eligibleStudents;
-}
-
-// Group files by course and check if each course has both student and quiz files
-// Now supports course prefix merging
-export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseData> {
-  // First detect course prefixes for merging
-  const coursePrefixes = detectCoursePrefixes(files);
-  console.log('Detected course prefixes for grouping:', coursePrefixes);
-  
-  const courseMap: Record<string, CourseData> = {};
-  
-  files.forEach(file => {
-    if (!file.courseName) return;
-    
-    // Trim course name to ensure consistency
-    const courseName = file.courseName.trim();
-    
-    // Check if this course should be grouped based on prefix
-    const coursePrefix = getCoursePrefixForFile(courseName, coursePrefixes);
-    const finalCourseName = coursePrefix || courseName;
-    
-    if (!courseMap[finalCourseName]) {
-      courseMap[finalCourseName] = {
-        isComplete: false,
-        studentFile: undefined,
-        quizFile: undefined
-      };
-    }
-    
-    if (file.type === 'student') {
-      // If there's already a student file, it means we merged files in processFiles
-      // We'll still overwrite it here for UI consistency
-      courseMap[finalCourseName].studentFile = file;
-    } else if (file.type === 'quiz') {
-      // If there's already a quiz file, it means we merged files in processFiles
-      // We'll still overwrite it here for UI consistency
-      courseMap[finalCourseName].quizFile = file;
-    }
-    
-    // Update complete status
-    courseMap[finalCourseName].isComplete = 
-      courseMap[finalCourseName].studentFile !== undefined && 
-      courseMap[finalCourseName].quizFile !== undefined;
-  });
-  
-  return courseMap;
 }
 
 // Helper function to detect course prefixes from student objects
@@ -243,58 +229,6 @@ function getCoursePrefixForFile(courseName: string, prefixes: string[]): string 
   return null;
 }
 
-// Extract course name from file name - improved to handle course codes like "aifi_303"
-export function extractCourseName(filename: string): string {
-  // Remove file extension
-  const nameWithoutExt = filename.split('.')[0];
-  
-  // For files ending with _quiz_scores or _students, extract the part before that
-  if (nameWithoutExt.includes('_quiz_scores')) {
-    const coursePart = nameWithoutExt.split('_quiz_scores')[0];
-    console.log(`Extracted course name from quiz file: '${filename}' → '${coursePart}'`);
-    return coursePart;
-  }
-  
-  if (nameWithoutExt.includes('_students')) {
-    const coursePart = nameWithoutExt.split('_students')[0];
-    console.log(`Extracted course name from student file: '${filename}' → '${coursePart}'`);
-    return coursePart;
-  }
-  
-  // If no pattern matches, return original name without extension
-  console.log(`No pattern match for filename '${filename}', using '${nameWithoutExt}'`);
-  return nameWithoutExt;
-}
-
-// Parse name from a string with improved format handling
-export function parseName(name: string): { firstName: string; lastName: string } {
-  if (!name || typeof name !== 'string' || name.trim() === '') {
-    return { firstName: 'Unknown', lastName: 'Unknown' };
-  }
-  
-  name = name.trim();
-  
-  // Format: "Last, First" (quiz scores file format)
-  if (name.includes(',')) {
-    const parts = name.split(',').map(part => part.trim());
-    return {
-      firstName: parts.length > 1 ? parts[1] : 'Unknown',
-      lastName: parts[0] || 'Unknown'
-    };
-  } 
-  // Format: "First Last" (student file format)
-  else if (name.includes(' ')) {
-    const parts = name.split(' ');
-    const firstName = parts[0] || 'Unknown';
-    const lastName = parts.slice(1).join(' ') || 'Unknown'; // All remaining parts form the last name
-    return { firstName, lastName };
-  } 
-  // Just a single name
-  else {
-    return { firstName: name, lastName: 'Unknown' };
-  }
-}
-
 // Parse CSV data from file content
 export function parseCSVData(filename: string, content: string): ParsedFile {
   console.log(`Parsing file: ${filename}`);
@@ -330,29 +264,6 @@ export function parseCSVData(filename: string, content: string): ParsedFile {
   } else {
     return parseQuizFile(courseName, headers, lines);
   }
-}
-
-// Helper function to parse CSV row (handles quotes)
-function parseCSVRow(row: string): string[] {
-  const result = [];
-  let inQuotes = false;
-  let currentValue = '';
-  
-  for (let i = 0; i < row.length; i++) {
-    const char = row[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(currentValue);
-      currentValue = '';
-    } else {
-      currentValue += char;
-    }
-  }
-  
-  result.push(currentValue);
-  return result;
 }
 
 // Parse a student data file with specific column format

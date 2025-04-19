@@ -59,3 +59,8 @@ export function groupFilesByCourse(files: ParsedFile[]): Record<string, CourseDa
   
   return courseMap;
 }
+
+// Get all available courses in a series
+export function getAllCoursesInSeries(courseNames: string[], seriesPrefix: string): string[] {
+  return courseNames.filter(name => name && name.startsWith(seriesPrefix));
+}
