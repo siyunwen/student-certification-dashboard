@@ -1,8 +1,8 @@
+
 import { Student, CertificationSettings, CertificationStats, ParsedFile, CourseData } from '../types/student';
 import { normalizeScore, isNotCompletedQuiz, parseScoreValue, hasCompletedAllQuizzes, getRequiredQuizCount } from './scoreUtils';
 import { getAllCoursesInSeries } from './courseUtils';
 import { extractCourseName, parseName } from './fileUtils';
-import { parseCSVData } from './fileParsingUtils';
 
 // Calculate certification statistics for students
 export function calculateCertificationStats(
@@ -84,6 +84,8 @@ export function getEligibleStudents(
     new Set(filteredByDate.map(s => s.courseName).filter(Boolean))
   ) as string[];
   
+  console.log("All available courses:", allAvailableCourses);
+  
   // Group students by email to check across all their courses
   const studentsByEmail = filteredByDate.reduce((groups: Record<string, Student[]>, student) => {
     if (!student.email) return groups;
@@ -101,6 +103,17 @@ export function getEligibleStudents(
   
   Object.entries(studentsByEmail).forEach(([email, studentRecords]) => {
     console.log(`\nEvaluating eligibility for student ${email} with ${studentRecords.length} course records`);
+    
+    // Debug output for David Mpinzile
+    if (email.includes("david.mpinzile") || studentRecords.some(s => 
+        (s.firstName?.toLowerCase() === "david" && s.lastName?.toLowerCase() === "mpinzile") || 
+        (s.fullName?.toLowerCase().includes("david") && s.fullName?.toLowerCase().includes("mpinzile")))) {
+      console.log("FOUND DAVID MPINZILE:", studentRecords.map(s => ({
+        courseName: s.courseName,
+        score: s.score,
+        completed: s.courseCompleted
+      })));
+    }
     
     // If student only has one course record
     if (studentRecords.length === 1) {
@@ -158,16 +171,19 @@ export function getEligibleStudents(
       );
       
       // Student must have passed all courses AND be enrolled in all courses for the series
-      if (!seriesPassed || !isEnrolledInAllCourses) {
+      if (!isEnrolledInAllCourses) {
+        console.log(`ENROLLMENT CHECK FAILED for ${email}:`);
+        console.log(`  All courses in series: ${allCoursesInSeries.join(', ')}`);
+        console.log(`  Student enrolled in: ${enrolledCourseNames.join(', ')}`);
+        console.log(`  Missing courses: ${allCoursesInSeries.filter(c => !enrolledCourseNames.includes(c)).join(', ')}`);
         allSeriesPassed = false;
-        console.log(`Student ${email} failed series ${seriesPrefix}: passed all=${seriesPassed}, enrolled in all=${isEnrolledInAllCourses}`);
-        if (!isEnrolledInAllCourses) {
-          console.log(`  Missing courses: ${allCoursesInSeries.filter(c => !enrolledCourseNames.includes(c)).join(', ')}`);
-        }
-        if (!seriesPassed) {
-          const failedCourses = seriesRecords.filter(r => r.score < settings.passThreshold || !r.courseCompleted);
-          console.log(`  Failed courses: ${failedCourses.map(c => `${c.courseName}(${c.score}%)`).join(', ')}`);
-        }
+      }
+      
+      if (!seriesPassed) {
+        console.log(`PASSING CHECK FAILED for ${email}:`);
+        const failedCourses = seriesRecords.filter(r => r.score < settings.passThreshold || !r.courseCompleted);
+        console.log(`  Failed courses: ${failedCourses.map(c => `${c.courseName}(${c.score}%)`).join(', ')}`);
+        allSeriesPassed = false;
       }
     });
     
@@ -182,6 +198,8 @@ export function getEligibleStudents(
       representativeRecord.score = averageScore;
       representativeRecord.allCourses = enrolledCourses;
       eligibleStudents.push(representativeRecord);
+    } else {
+      console.log(`Student ${email} did NOT pass all course series`);
     }
   });
   
