@@ -1,28 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
-import { 
-  CheckCircle2, 
-  XCircle, 
-  ChevronLeft, 
-  ChevronRight, 
-  ChevronsLeft, 
-  ChevronsRight,
-  ArrowUpDown,
-  ChevronDown
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { Button } from '@/components/ui/button';
+import { ArrowUpDown } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { Student } from '@/types/student';
-import { Badge } from '@/components/ui/badge';
+import { TableControls } from './student-table/TableControls';
+import { StudentTableRow } from './student-table/StudentTableRow';
+import { TablePagination } from './student-table/TablePagination';
 import { normalizeScore } from '@/utils/scoreUtils';
 
 interface StudentTableProps {
@@ -36,7 +20,7 @@ type SortOrder = 'asc' | 'desc';
 
 const StudentTable = ({ students, passThreshold, className }: StudentTableProps) => {
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -48,47 +32,18 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   const [selectedCourse, setSelectedCourse] = useState<string>('');
 
   useEffect(() => {
-    console.log("Raw students data:", students.map(s => ({
-      name: s.fullName,
-      email: s.email,
-      rawScore: s.score,
-      courseCompleted: s.courseCompleted,
-      allQuizzesCompleted: s.allQuizzesCompleted,
-      requiredQuizCount: s.requiredQuizCount,
-      quizzes: s.quizScores?.length || 0,
-      id: s.id,
-      courseName: s.courseName,
-      firstName: s.firstName,
-      lastName: s.lastName,
-      allCourses: s.allCourses,
-    })));
-    
-    const normalized = students.map(student => {
-      return {
-        ...student,
-        score: normalizeScore(student.score, true),
-        quizScores: student.quizScores?.map(quiz => ({
-          ...quiz,
-          score: normalizeScore(quiz.score, true)
-        })) || []
-      };
-    });
-    
-    console.log("Normalized students data:", normalized.map(s => ({
-      name: s.fullName,
-      email: s.email,
-      normalizedScore: s.score,
-      courseCompleted: s.courseCompleted,
-      allQuizzesCompleted: s.allQuizzesCompleted,
-      quizzes: s.quizScores?.length || 0,
-      id: s.id,
-      courseName: s.courseName,
-      allCourses: s.allCourses,
-    })));
+    const normalized = students.map(student => ({
+      ...student,
+      score: normalizeScore(student.score, true),
+      quizScores: student.quizScores?.map(quiz => ({
+        ...quiz,
+        score: normalizeScore(quiz.score, true)
+      })) || []
+    }));
     
     setFormattedStudents(normalized);
   }, [students]);
-  
+
   const filteredStudents = formattedStudents.filter((student) => {
     const matchesSearch = 
       (student.firstName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -125,7 +80,7 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
       ? formattedStudents.filter(s => s.courseName === selectedCourse)
       : formattedStudents;
     
-    if (relevantStudents.length === 0) return 0;
+    if (relevantStudents.length === 0) return '0';
     
     const sum = relevantStudents.reduce((total, student) => total + (student.score || 0), 0);
     return (sum / relevantStudents.length).toFixed(1);
@@ -149,64 +104,34 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
   };
   
   const toggleSelectStudent = (id: string) => {
-    if (selectedStudents.includes(id)) {
-      setSelectedStudents(selectedStudents.filter(s => s !== id));
-    } else {
-      setSelectedStudents([...selectedStudents, id]);
-    }
+    setSelectedStudents(prev => 
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
   };
   
   const toggleExpandStudent = (id: string) => {
-    if (expandedStudents.includes(id)) {
-      setExpandedStudents(expandedStudents.filter(s => s !== id));
-    } else {
-      setExpandedStudents([...expandedStudents, id]);
-    }
+    setExpandedStudents(prev => 
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
   };
-  
+
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3" />;
     return <ArrowUpDown className="ml-1 h-3 w-3 text-brand-500" />;
   };
-  
+
   return (
     <div className={className}>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <Input
-            placeholder="Search by name or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-xs"
-          />
-          
-          {courseNames.length > 0 && (
-            <select
-              value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700"
-            >
-              <option value="">All Courses</option>
-              {courseNames.map(course => (
-                <option key={course} value={course}>{course}</option>
-              ))}
-            </select>
-          )}
-        </div>
-        
-        <div className="text-sm text-slate-500">
-          {selectedStudents.length > 0 ? (
-            <span>{selectedStudents.length} selected</span>
-          ) : (
-            <div className="flex flex-col items-end">
-              <span>{sortedStudents.length} students found</span>
-              {selectedCourse && (
-                <span className="font-medium text-brand-600">Avg. score: {courseAverageScore()}%</span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <TableControls 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        courseNames={courseNames}
+        selectedCourse={selectedCourse}
+        setSelectedCourse={setSelectedCourse}
+        totalStudents={sortedStudents.length}
+        selectedCount={selectedStudents.length}
+        courseAverageScore={courseAverageScore}
+      />
       
       <div className="rounded-lg border overflow-hidden">
         <Table>
@@ -262,217 +187,30 @@ const StudentTable = ({ students, passThreshold, className }: StudentTableProps)
                 </TableCell>
               </TableRow>
             ) : (
-              <>
-                {paginatedStudents.map((student) => {
-                  const hasPassingScore = student.score >= passThreshold;
-                  
-                  const isPassing = hasPassingScore && student.courseCompleted;
-                  
-                  const isExpanded = expandedStudents.includes(student.id);
-                  
-                  const hasMultipleCourses = student.allCourses && student.allCourses.length > 1;
-                  
-                  console.log(`Student ${student.fullName}: score=${student.score?.toFixed(1)}, isPassing=${isPassing}, hasPassingScore=${hasPassingScore}, courseCompleted=${student.courseCompleted}, courses=${student.allCourses?.join(', ') || student.courseName}`);
-                  
-                  return (
-                    <React.Fragment key={student.id}>
-                      <TableRow className={`group animate-fade-in ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/30' : ''}`}>
-                        <TableCell>
-                          <Checkbox 
-                            checked={selectedStudents.includes(student.id)}
-                            onCheckedChange={() => toggleSelectStudent(student.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="p-0 w-10">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => toggleExpandStudent(student.id)}
-                          >
-                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{student.firstName} {student.lastName}</div>
-                          <div className="text-sm text-slate-500 truncate max-w-[150px] sm:max-w-xs">
-                            {student.email}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          <span 
-                            className={`
-                              ${isPassing 
-                                ? 'text-green-600 dark:text-green-400' 
-                                : 'text-slate-600 dark:text-slate-400'
-                              }
-                            `}
-                          >
-                            {student.score?.toFixed(1)}%
-                          </span>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center">
-                            {isPassing ? (
-                              <>
-                                <CheckCircle2 className="w-4 h-4 text-green-500 mr-1.5" />
-                                <span className="text-green-700 dark:text-green-400 text-sm font-medium">Eligible</span>
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="w-4 h-4 text-slate-400 mr-1.5" />
-                                <span className="text-slate-500 text-sm">
-                                  {!hasPassingScore ? "Score below threshold" : 
-                                   !student.courseCompleted ? "Course not completed" : 
-                                   "Not eligible"}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {hasMultipleCourses ? (
-                            <div className="flex flex-wrap gap-1">
-                              {student.allCourses?.slice(0, 2).map((course, i) => (
-                                <Badge key={i} variant="outline" className="font-normal">
-                                  {course}
-                                </Badge>
-                              ))}
-                              {student.allCourses && student.allCourses.length > 2 && (
-                                <Badge variant="outline" className="font-normal">
-                                  +{student.allCourses.length - 2} more
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <Badge variant="outline" className="font-normal">
-                              {student.courseName || 'Unknown'}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-slate-600 dark:text-slate-400 text-sm">
-                          {student.lastActivityDate ? format(new Date(student.lastActivityDate), 'MMM d, yyyy') : 'N/A'}
-                        </TableCell>
-                      </TableRow>
-                      
-                      {isExpanded && (
-                        <TableRow className="bg-slate-50 dark:bg-slate-800/30">
-                          <TableCell colSpan={7} className="p-0">
-                            <div className="p-4">
-                              {hasMultipleCourses && (
-                                <div className="mb-4">
-                                  <h4 className="text-sm font-medium mb-2">Enrolled Courses</h4>
-                                  <div className="flex flex-wrap gap-1">
-                                    {student.allCourses?.map((course, i) => (
-                                      <Badge key={i} variant="secondary" className="font-normal">
-                                        {course}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              <div className="flex justify-between items-start mb-2">
-                                <h4 className="text-sm font-medium">Quiz Scores</h4>
-                                {student.requiredQuizCount && (
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                      student.allQuizzesCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                                      'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                                    }`}>
-                                    {student.quizScores?.filter(q => q.score !== null).length || 0}/{student.requiredQuizCount} quizzes completed
-                                  </span>
-                                )}
-                              </div>
-                              
-                              {student.quizScores && student.quizScores.length > 0 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                  {student.quizScores.map((quiz, index) => (
-                                    <div 
-                                      key={index} 
-                                      className={`p-2 rounded border flex justify-between items-center ${
-                                        quiz.score === null ? 
-                                          'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700' : 
-                                          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                                      }`}
-                                    >
-                                      <span className="text-sm truncate mr-2" title={quiz.quizName}>
-                                        {quiz.quizName}
-                                      </span>
-                                      <span 
-                                        className={`text-sm font-medium ${
-                                          quiz.score === null ? 'text-slate-500 dark:text-slate-400' :
-                                          quiz.score >= passThreshold ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
-                                        }`}
-                                      >
-                                        {quiz.score === null ? 'Not completed' : `${quiz.score?.toFixed(1)}%`}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm text-slate-500 italic">No quiz scores available</p>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </>
+              paginatedStudents.map((student) => (
+                <StudentTableRow
+                  key={student.id}
+                  student={student}
+                  isSelected={selectedStudents.includes(student.id)}
+                  isExpanded={expandedStudents.includes(student.id)}
+                  passThreshold={passThreshold}
+                  onSelect={() => toggleSelectStudent(student.id)}
+                  onExpand={() => toggleExpandStudent(student.id)}
+                />
+              ))
             )}
           </TableBody>
         </Table>
       </div>
       
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-slate-500">
-            Showing {start + 1}-{Math.min(start + rowsPerPage, sortedStudents.length)} of {sortedStudents.length}
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => setPage(1)}
-              disabled={page === 1}
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-slate-600 px-2">
-              Page {page} of {totalPages}
-            </span>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => setPage(page + 1)}
-              disabled={page === totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => setPage(totalPages)}
-              disabled={page === totalPages}
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        start={start}
+        rowsPerPage={rowsPerPage}
+        totalItems={sortedStudents.length}
+        onPageChange={setPage}
+      />
     </div>
   );
 };
